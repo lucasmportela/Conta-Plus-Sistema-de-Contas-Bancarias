@@ -4,7 +4,7 @@ Aplicação web demonstrativa para gerenciamento de contas bancárias, desenvolv
 
 > **Aviso:** este é um projeto educacional para portfólio. Não é um sistema bancário real e não deve ser utilizado para armazenar dinheiro ou dados financeiros verdadeiros.
 
-## ✨ Funcionalidades
+## Funcionalidades
 
 - Cadastro de contas com titular, número e saldo inicial.
 - Validação de nomes, números de conta e valores.
@@ -17,7 +17,7 @@ Aplicação web demonstrativa para gerenciamento de contas bancárias, desenvolv
 - Persistência local dos dados em SQLite.
 - Interface responsiva para desktop e dispositivos móveis.
 
-## 📸 Demonstração Visual
+## Demonstração Visual
 
 ### Tela Inicial (Vazia)
 Tela inicial do programa aguardando as primeiras entradas de dados para serem processados com a exibição de total de contas cadastradas, saldo consolidado de todas as contas e número total de movimentações registradas.
@@ -41,7 +41,7 @@ Extrato de uma conta específica exibindo nome do titular, número da conta, sal
 
 As capturas de tela utilizadas neste README estão armazenadas em `docs/screenshots/`.
 
-## 🧰 Tecnologias utilizadas
+## Tecnologias utilizadas
 
 **Back-end**
 - Python
@@ -54,7 +54,7 @@ As capturas de tela utilizadas neste README estão armazenadas em `docs/screensh
 - CSS3
 - JavaScript (Fetch API)
 
-## 📁 Estrutura do projeto
+## Estrutura do projeto
 
 ```text
 conta-mais/
@@ -87,7 +87,7 @@ conta-mais/
         └── .gitkeep
 ```
 
-## ⚙️ Como executar
+## Como executar
 
 ### 1. Pré-requisitos
 
@@ -197,7 +197,7 @@ O banco SQLite e as tabelas são criados automaticamente na primeira execução.
 }
 ```
 
-## 🧪 Testes automatizados
+## Testes automatizados
 
 A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integração criam bancos SQLite temporários, isolados dos dados locais da aplicação.
 
@@ -221,7 +221,7 @@ No Windows, sem ativar o ambiente virtual:
 
 Os mesmos testes são executados automaticamente pelo GitHub Actions a cada push ou pull request direcionado à branch `main`.
 
-## 🧠 Regras de negócio
+## Regras de negócio
 
 - O nome do titular deve conter pelo menos 3 caracteres.
 - O número da conta deve ser único.
@@ -232,7 +232,7 @@ Os mesmos testes são executados automaticamente pelo GitHub Actions a cada push
 - Os valores monetários são tratados com `Decimal` para evitar imprecisões comuns de ponto flutuante.
 - Cada movimentação é registrada no extrato da conta correspondente.
 
-## 🔒 Limitações e segurança
+## Limitações e segurança
 
 Este projeto foi criado para fins de estudo e não deve ser exposto publicamente como um serviço financeiro.
 
@@ -242,7 +242,7 @@ Este projeto foi criado para fins de estudo e não deve ser exposto publicamente
 - O modo Debug fica desativado por padrão; o servidor local escuta em `127.0.0.1`.
 - Antes de qualquer uso real seriam necessários autenticação, autorização por conta, proteção CSRF, controles de concorrência, auditoria, gestão segura de dados, HTTPS e implantação com servidor de produção.
 
-## 👨‍💻 Autor
+## Autor
 
 **Lucas Martins Portela**  
 Desenvolvedor Back-end Júnior
