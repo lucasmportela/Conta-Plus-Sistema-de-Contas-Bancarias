@@ -207,7 +207,7 @@ A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integra
 - **Testes das rotas (`test_api.py`):** página inicial, health check, cadastro, duplicidade de conta, depósitos, saques, transferências, extratos, resumo e respostas de erro.
 - **Testes do banco (`test_database.py`):** criação das tabelas, persistência, commit, rollback, unicidade do número da conta e integridade referencial.
 
-Execute toda a suíte a partir da pasta `SistemaContasBancarias`:
+Execute toda a suíte a partir da raiz do repositório (a pasta que contém `app.py`, `conta.py` e `tests/`):
 
 ```bash
 python -m unittest discover -s tests -v
