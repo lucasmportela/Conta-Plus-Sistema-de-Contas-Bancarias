@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.env
+
+# Banco de dados local
+instance/
+*.db
+*.sqlite
+*.sqlite3
+
+# Editor / sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Capturas temporárias
+prints/*.tmp

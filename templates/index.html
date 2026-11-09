@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Sistema demonstrativo de gerenciamento de contas bancárias.">
+  <title>Conta+ | Gestão bancária</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="/">
+        <span class="brand-mark">C+</span>
+        <span>conta<span class="brand-light">+</span></span>
+      </a>
+      <div class="sidebar-label">MENU PRINCIPAL</div>
+      <a class="nav-item active" href="#visao-geral"><span class="nav-icon">▦</span> Visão geral</a>
+      <a class="nav-item" href="#contas"><span class="nav-icon">▤</span> Minhas contas</a>
+      <a class="nav-item" href="#operacoes"><span class="nav-icon">⇄</span> Operações</a>
+      <div class="sidebar-note">
+        <span class="note-dot"></span>
+        <div><strong>Ambiente de demonstração</strong><small>Dados armazenados localmente</small></div>
+      </div>
+      <div class="sidebar-footer">CONTA+ · PORTFÓLIO</div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">PAINEL FINANCEIRO</p>
+          <h1>Visão geral</h1>
+          <p class="subtitle">Gerencie contas e movimentações em um só lugar.</p>
+        </div>
+        <div class="status-pill"><span></span> Sistema operacional</div>
+      </header>
+
+      <section class="summary-grid" id="visao-geral">
+        <article class="summary-card">
+          <div class="summary-top"><span>Total de contas</span><span class="summary-icon blue">▤</span></div>
+          <strong id="total-contas">0</strong>
+          <small>Contas cadastradas</small>
+        </article>
+        <article class="summary-card">
+          <div class="summary-top"><span>Saldo consolidado</span><span class="summary-icon green">R$</span></div>
+          <strong id="saldo-total">R$ 0,00</strong>
+          <small>Soma dos saldos disponíveis</small>
+        </article>
+        <article class="summary-card">
+          <div class="summary-top"><span>Movimentações</span><span class="summary-icon violet">↗</span></div>
+          <strong id="total-movimentacoes">0</strong>
+          <small>Operações registradas</small>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel" id="cadastro">
+          <div class="panel-heading">
+            <div><p class="eyebrow">NOVO CADASTRO</p><h2>Criar conta</h2></div>
+            <span class="heading-icon">＋</span>
+          </div>
+          <form id="form-conta" class="form-grid">
+            <label>Nome do titular<input name="nome" type="text" minlength="3" maxlength="80" placeholder="Ex.: Lucas Martins" required></label>
+            <label>Número da conta<input name="numero" type="text" maxlength="20" placeholder="Ex.: 00001" required></label>
+            <label class="full">Saldo inicial <span class="optional">(opcional)</span><div class="money-input"><span>R$</span><input name="saldo_inicial" type="number" min="0" step="0.01" value="0.00"></div></label>
+            <button class="button button-primary full" type="submit">Criar conta <span>→</span></button>
+          </form>
+        </article>
+
+        <article class="panel" id="operacoes">
+          <div class="panel-heading">
+            <div><p class="eyebrow">MOVIMENTAÇÃO</p><h2>Nova operação</h2></div>
+            <span class="heading-icon">⇄</span>
+          </div>
+          <form id="form-operacao" class="form-grid">
+            <label class="full">Conta de origem<select id="conta-origem" required><option value="">Selecione uma conta</option></select></label>
+            <div class="full operation-switch" role="group" aria-label="Tipo de operação">
+              <button type="button" class="operation-tab active" data-operation="deposito">Depósito</button>
+              <button type="button" class="operation-tab" data-operation="saque">Saque</button>
+              <button type="button" class="operation-tab" data-operation="transferencia">Transferência</button>
+            </div>
+            <label class="full hidden" id="destino-wrap">Conta de destino<select id="conta-destino"><option value="">Selecione o destino</option></select></label>
+            <label class="full">Valor da operação<div class="money-input"><span>R$</span><input id="valor-operacao" type="number" min="0.01" step="0.01" placeholder="0,00" required></div></label>
+            <button class="button button-primary full" type="submit">Confirmar operação <span>→</span></button>
+          </form>
+        </article>
+      </section>
+
+      <section class="panel accounts-panel" id="contas">
+        <div class="panel-heading accounts-heading">
+          <div><p class="eyebrow">ACOMPANHAMENTO</p><h2>Contas cadastradas</h2></div>
+          <span class="count-label" id="count-label">0 contas</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>TITULAR</th><th>NÚMERO</th><th>SALDO DISPONÍVEL</th><th>AÇÃO</th></tr></thead>
+            <tbody id="lista-contas">
+              <tr><td colspan="4" class="empty-state">Nenhuma conta cadastrada. Crie sua primeira conta acima.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <footer>Conta+ <span>·</span> Projeto demonstrativo de programação orientada a objetos e API REST.</footer>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <dialog id="modal-extrato" class="statement-modal">
+    <div class="modal-header">
+      <div><p class="eyebrow">HISTÓRICO FINANCEIRO</p><h2>Extrato da conta</h2><p id="extrato-titular" class="subtitle"></p></div>
+      <button class="close-button" id="fechar-extrato" aria-label="Fechar">×</button>
+    </div>
+    <div id="extrato-conteudo"></div>
+  </dialog>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
