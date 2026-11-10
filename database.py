@@ -1,8 +1,9 @@
+import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent / "instance" / "contas.db"
+DB_PATH = Path(os.getenv("DATABASE_PATH", str(Path(__file__).resolve().parent / "instance" / "contas.db"))).expanduser()
 
 
 @contextmanager
@@ -30,7 +31,25 @@ def inicializar_banco():
                 nome TEXT NOT NULL,
                 email TEXT NOT NULL COLLATE NOCASE UNIQUE,
                 senha_hash TEXT NOT NULL,
+                email_verified INTEGER NOT NULL DEFAULT 0,
+                session_version INTEGER NOT NULL DEFAULT 0,
                 criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS email_verification_tokens (
+                token_hash TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+                expires_at INTEGER NOT NULL,
+                used_at INTEGER,
+                created_at INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                token_hash TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+                expires_at INTEGER NOT NULL,
+                used_at INTEGER,
+                created_at INTEGER NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS contas (
@@ -66,6 +85,19 @@ def inicializar_banco():
             """
         )
 
+        colunas_usuarios = {
+            coluna["name"]
+            for coluna in conn.execute("PRAGMA table_info(usuarios)").fetchall()
+        }
+        if "email_verified" not in colunas_usuarios:
+            conn.execute(
+                "ALTER TABLE usuarios ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0"
+            )
+        if "session_version" not in colunas_usuarios:
+            conn.execute(
+                "ALTER TABLE usuarios ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0"
+            )
+
         colunas_contas = {
             coluna["name"]
             for coluna in conn.execute("PRAGMA table_info(contas)").fetchall()
@@ -85,6 +117,12 @@ def inicializar_banco():
         )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_tentativas_login_atualizado_em ON tentativas_login(atualizado_em)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_email_verification_user_id ON email_verification_tokens(user_id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_password_reset_user_id ON password_reset_tokens(user_id)"
         )
 
 
