@@ -185,8 +185,12 @@ def criar_token_de_conta(tabela, usuario_id, validade):
 
 @app.before_request
 def aplicar_controles_de_transporte():
-    if APP_ENV == "production" and not request.is_secure:
-        return resposta_erro("A conexão HTTPS é obrigatória.", 400)
+    if APP_ENV == "production":
+        if not request.is_secure:
+            return resposta_erro("A conexão HTTPS é obrigatória.", 400)
+        host = request.host.split(":", 1)[0].lower()
+        if host not in {item.lower() for item in TRUSTED_HOSTS}:
+            return resposta_erro("Host não autorizado.", 400)
     return None
 
 
@@ -203,6 +207,9 @@ def adicionar_cabecalhos_de_seguranca(resposta):
         "connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; "
         "form-action 'self'",
     )
+    if request.path in {"/confirmar-email", "/redefinir-senha"}:
+        resposta.headers["Cache-Control"] = "no-store"
+        resposta.headers["Referrer-Policy"] = "no-referrer"
     if request.is_secure:
         resposta.headers.setdefault(
             "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
@@ -264,6 +271,22 @@ def api_registrar():
         return resposta_erro("Informe um endereço de e-mail válido.")
     if len(senha) < 10 or len(senha) > 128:
         return resposta_erro("A senha deve ter entre 10 e 128 caracteres.")
+
+    chave_cadastro = chave_tentativas_login("", "register")
+    agora = int(time.time())
+    bloqueio = rate_limiter.blocked_seconds(
+        chave_cadastro, agora, app.config["LOGIN_WINDOW_SECONDS"],
+        app.config["LOGIN_ATTEMPT_RETENTION_SECONDS"],
+    )
+    if bloqueio:
+        return resposta_bloqueio_login(bloqueio)
+    bloqueio = rate_limiter.record_failure(
+        chave_cadastro, agora, app.config["LOGIN_MAX_ATTEMPTS"],
+        app.config["LOGIN_WINDOW_SECONDS"], app.config["LOGIN_BLOCK_SECONDS"],
+        app.config["LOGIN_ATTEMPT_RETENTION_SECONDS"],
+    )
+    if bloqueio:
+        return resposta_bloqueio_login(bloqueio)
 
     try:
         with conectar() as conn:
@@ -333,6 +356,21 @@ def api_confirmar_email():
 def api_reenviar_confirmacao():
     dados = request.get_json(silent=True) or {}
     email = str(dados.get("email", "")).strip().lower()
+    chave = chave_tentativas_login(email, "resend-verification")
+    agora = int(time.time())
+    bloqueio = rate_limiter.blocked_seconds(
+        chave, agora, app.config["LOGIN_WINDOW_SECONDS"],
+        app.config["LOGIN_ATTEMPT_RETENTION_SECONDS"],
+    )
+    if bloqueio:
+        return resposta_bloqueio_login(bloqueio)
+    bloqueio = rate_limiter.record_failure(
+        chave, agora, app.config["LOGIN_MAX_ATTEMPTS"],
+        app.config["LOGIN_WINDOW_SECONDS"], app.config["LOGIN_BLOCK_SECONDS"],
+        app.config["LOGIN_ATTEMPT_RETENTION_SECONDS"],
+    )
+    if bloqueio:
+        return resposta_bloqueio_login(bloqueio)
     with conectar() as conn:
         usuario = conn.execute(
             "SELECT id, email FROM usuarios WHERE email = ? AND email_verified = 0",
@@ -356,6 +394,21 @@ def api_reenviar_confirmacao():
 def api_solicitar_recuperacao():
     dados = request.get_json(silent=True) or {}
     email = str(dados.get("email", "")).strip().lower()
+    chave = chave_tentativas_login(email, "password-reset")
+    agora = int(time.time())
+    bloqueio = rate_limiter.blocked_seconds(
+        chave, agora, app.config["LOGIN_WINDOW_SECONDS"],
+        app.config["LOGIN_ATTEMPT_RETENTION_SECONDS"],
+    )
+    if bloqueio:
+        return resposta_bloqueio_login(bloqueio)
+    bloqueio = rate_limiter.record_failure(
+        chave, agora, app.config["LOGIN_MAX_ATTEMPTS"],
+        app.config["LOGIN_WINDOW_SECONDS"], app.config["LOGIN_BLOCK_SECONDS"],
+        app.config["LOGIN_ATTEMPT_RETENTION_SECONDS"],
+    )
+    if bloqueio:
+        return resposta_bloqueio_login(bloqueio)
     with conectar() as conn:
         usuario = conn.execute(
             "SELECT id, email FROM usuarios WHERE email = ? AND email_verified = 1",
@@ -427,10 +480,10 @@ def redefinir_senha():
 def politica_privacidade():
     return render_template("privacy.html")
 
-def chave_tentativas_login(email):
+def chave_tentativas_login(email, acao="login"):
     """Gera uma chave HMAC sem armazenar e-mail ou endereço IP em texto puro."""
     origem = request.remote_addr or "desconhecido"
-    identificador = f"{origem}\0{email}".encode("utf-8")
+    identificador = f"{acao}\0{origem}\0{email}".encode("utf-8")
     segredo = app.config["SECRET_KEY"].encode("utf-8")
     return hmac.new(segredo, identificador, hashlib.sha256).hexdigest()
 
