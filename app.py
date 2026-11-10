@@ -1,9 +1,14 @@
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
+from functools import wraps
 from pathlib import Path
+import hmac
 import os
+import secrets
 import sqlite3
+from datetime import timedelta
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, session
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from conta import Conta, validar_valor
 from database import conectar, inicializar_banco, obter_conta, listar_contas, salvar_transacao
@@ -12,12 +17,30 @@ BASE_DIR = Path(__file__).resolve().parent
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
+SECRET_KEY = os.getenv("SECRET_KEY")
+if APP_ENV == "production" and not SECRET_KEY:
+    raise RuntimeError("Defina SECRET_KEY no ambiente de produção.")
+if not SECRET_KEY:
+    SECRET_KEY = secrets.token_hex(32)
+
 DEBUG = (
     APP_ENV != "production"
     and os.getenv("FLASK_DEBUG", "false").strip().lower()
     in {"1", "true", "yes", "on"}
 )
-app.config.update(JSON_AS_ASCII=False, DEBUG=DEBUG)
+
+app.config.update(
+    SECRET_KEY=SECRET_KEY,
+    DEBUG=DEBUG,
+    JSON_AS_ASCII=False,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=(APP_ENV == "production"),
+    PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
+    SESSION_REFRESH_EACH_REQUEST=True,
+    MAX_CONTENT_LENGTH=1024 * 1024,
+)
+app.json.ensure_ascii = False
 
 inicializar_banco()
 
@@ -26,8 +49,33 @@ def resposta_erro(mensagem, status=400):
     return jsonify({"erro": mensagem}), status
 
 
-def carregar_conta(conn, conta_id):
-    registro = obter_conta(conn, conta_id)
+def requer_autenticacao(funcao):
+    @wraps(funcao)
+    def wrapper(*args, **kwargs):
+        if not session.get("usuario_id"):
+            return resposta_erro("Autenticação necessária.", 401)
+        return funcao(*args, **kwargs)
+    return wrapper
+
+
+def iniciar_sessao(usuario_id):
+    session.clear()
+    session["usuario_id"] = usuario_id
+    session["csrf_token"] = secrets.token_urlsafe(32)
+    session.permanent = True
+
+
+@app.before_request
+def proteger_requisicoes_mutaveis():
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        esperado = session.get("csrf_token")
+        recebido = request.headers.get("X-CSRF-Token", "")
+        if not esperado or not recebido or not hmac.compare_digest(esperado, recebido):
+            return resposta_erro("Token CSRF ausente ou inválido.", 403)
+
+
+def carregar_conta(conn, conta_id, usuario_id):
+    registro = obter_conta(conn, conta_id, usuario_id)
     if registro is None:
         return None
     return Conta(
@@ -45,16 +93,114 @@ def index():
 
 @app.get("/api/health")
 def health():
-    return jsonify({"status": "ok", "mensagem": "API do Sistema de Contas Bancárias funcionando."})
+    return jsonify({
+        "status": "ok",
+        "mensagem": "API do Sistema de Contas Bancárias funcionando.",
+    })
+
+
+@app.get("/api/csrf")
+def api_csrf():
+    if not session.get("csrf_token"):
+        session["csrf_token"] = secrets.token_urlsafe(32)
+    return jsonify({"csrf_token": session["csrf_token"]})
+
+
+@app.post("/api/register")
+def api_registrar():
+    dados = request.get_json(silent=True) or {}
+    nome = str(dados.get("nome", "")).strip()
+    email = str(dados.get("email", "")).strip().lower()
+    senha = str(dados.get("senha", ""))
+
+    if len(nome) < 3 or len(nome) > 80:
+        return resposta_erro("O nome deve ter entre 3 e 80 caracteres.")
+    if len(email) > 254 or email.count("@") != 1 or "." not in email.rsplit("@", 1)[-1]:
+        return resposta_erro("Informe um endereço de e-mail válido.")
+    if len(senha) < 10 or len(senha) > 128:
+        return resposta_erro("A senha deve ter entre 10 e 128 caracteres.")
+
+    try:
+        with conectar() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO usuarios (nome, email, senha_hash)
+                VALUES (?, ?, ?)
+                """,
+                (nome, email, generate_password_hash(senha, method="scrypt")),
+            )
+            usuario_id = cursor.lastrowid
+    except sqlite3.IntegrityError:
+        return resposta_erro("Já existe uma conta de usuário com esse e-mail.", 409)
+
+    iniciar_sessao(usuario_id)
+    return jsonify({
+        "mensagem": "Cadastro realizado com sucesso.",
+        "usuario": {"id": usuario_id, "nome": nome, "email": email},
+    }), 201
+
+
+@app.post("/api/login")
+def api_login():
+    dados = request.get_json(silent=True) or {}
+    email = str(dados.get("email", "")).strip().lower()
+    senha = str(dados.get("senha", ""))
+
+    with conectar() as conn:
+        usuario = conn.execute(
+            "SELECT id, nome, email, senha_hash FROM usuarios WHERE email = ?",
+            (email,),
+        ).fetchone()
+
+    if usuario is None or not check_password_hash(usuario["senha_hash"], senha):
+        return resposta_erro("E-mail ou senha incorretos.", 401)
+
+    iniciar_sessao(usuario["id"])
+    return jsonify({
+        "mensagem": "Login realizado com sucesso.",
+        "usuario": {"id": usuario["id"], "nome": usuario["nome"], "email": usuario["email"]},
+    })
+
+
+@app.post("/api/logout")
+@requer_autenticacao
+def api_logout():
+    session.clear()
+    return jsonify({"mensagem": "Sessão encerrada com sucesso."})
+
+
+@app.get("/api/me")
+@requer_autenticacao
+def api_me():
+    with conectar() as conn:
+        usuario = conn.execute(
+            "SELECT id, nome, email FROM usuarios WHERE id = ?",
+            (session["usuario_id"],),
+        ).fetchone()
+    if usuario is None:
+        session.clear()
+        return resposta_erro("Sessão inválida. Entre novamente.", 401)
+    return jsonify({"usuario": dict(usuario)})
 
 
 @app.get("/api/resumo")
+@requer_autenticacao
 def resumo():
+    usuario_id = session["usuario_id"]
     with conectar() as conn:
-        contas = listar_contas(conn)
-        total_saldo = sum((Decimal(item["saldo"]) for item in contas), Decimal("0.00"))
+        contas = listar_contas(conn, usuario_id)
+        total_saldo = sum(
+            (Decimal(item["saldo"]) for item in contas),
+            Decimal("0.00"),
+        )
         total_movimentacoes = conn.execute(
-            "SELECT COUNT(*) AS total FROM transacoes"
+            """
+            SELECT COUNT(*) AS total
+            FROM transacoes AS t
+            INNER JOIN contas AS c ON c.id = t.conta_id
+            WHERE c.owner_id = ?
+            """,
+            (usuario_id,),
         ).fetchone()["total"]
     return jsonify({
         "total_contas": len(contas),
@@ -64,32 +210,40 @@ def resumo():
 
 
 @app.get("/api/contas")
+@requer_autenticacao
 def api_listar_contas():
     with conectar() as conn:
-        contas = listar_contas(conn)
+        contas = listar_contas(conn, session["usuario_id"])
     return jsonify([dict(conta) for conta in contas])
 
 
 @app.post("/api/contas")
+@requer_autenticacao
 def api_criar_conta():
     dados = request.get_json(silent=True) or {}
     nome = str(dados.get("nome", "")).strip()
     numero = str(dados.get("numero", "")).strip()
     try:
-        saldo_inicial = validar_valor(dados.get("saldo_inicial", "0"), permitir_zero=True)
+        saldo_inicial = validar_valor(
+            dados.get("saldo_inicial", "0"),
+            permitir_zero=True,
+        )
     except ValueError as erro:
         return resposta_erro(str(erro))
 
-    if len(nome) < 3:
-        return resposta_erro("O nome deve ter pelo menos 3 caracteres.")
-    if not numero:
-        return resposta_erro("Informe o número da conta.")
+    if len(nome) < 3 or len(nome) > 80:
+        return resposta_erro("O nome deve ter entre 3 e 80 caracteres.")
+    if not numero or len(numero) > 20:
+        return resposta_erro("Informe um número de conta válido.")
 
     try:
         with conectar() as conn:
             cursor = conn.execute(
-                "INSERT INTO contas (nome, numero, saldo) VALUES (?, ?, ?)",
-                (nome, numero, f"{saldo_inicial:.2f}"),
+                """
+                INSERT INTO contas (owner_id, nome, numero, saldo)
+                VALUES (?, ?, ?, ?)
+                """,
+                (session["usuario_id"], nome, numero, f"{saldo_inicial:.2f}"),
             )
             conta_id = cursor.lastrowid
             if saldo_inicial > 0:
@@ -98,14 +252,16 @@ def api_criar_conta():
                     saldo_inicial, Decimal("0.00"), saldo_inicial
                 )
     except sqlite3.IntegrityError:
-        return resposta_erro("Já existe uma conta com esse número.")
+        return resposta_erro("Já existe uma conta com esse número.", 409)
 
     return jsonify({
         "mensagem": "Conta criada com sucesso.",
         "conta": {
-            "id": conta_id, "nome": nome, "numero": numero,
-            "saldo": f"{saldo_inicial:.2f}"
-        }
+            "id": conta_id,
+            "nome": nome,
+            "numero": numero,
+            "saldo": f"{saldo_inicial:.2f}",
+        },
     }), 201
 
 
@@ -116,9 +272,10 @@ def processar_operacao(conta_id, tipo):
     except ValueError as erro:
         return resposta_erro(str(erro))
 
+    usuario_id = session["usuario_id"]
     try:
         with conectar() as conn:
-            conta = carregar_conta(conn, conta_id)
+            conta = carregar_conta(conn, conta_id, usuario_id)
             if conta is None:
                 return resposta_erro("Conta não encontrada.", 404)
 
@@ -132,8 +289,8 @@ def processar_operacao(conta_id, tipo):
                 tipo_db = "SAQUE"
 
             conn.execute(
-                "UPDATE contas SET saldo = ? WHERE id = ?",
-                (f"{conta.saldo:.2f}", conta.id),
+                "UPDATE contas SET saldo = ? WHERE id = ? AND owner_id = ?",
+                (f"{conta.saldo:.2f}", conta.id, usuario_id),
             )
             salvar_transacao(
                 conn, conta.id, tipo_db, descricao, valor,
@@ -149,16 +306,19 @@ def processar_operacao(conta_id, tipo):
 
 
 @app.post("/api/contas/<int:conta_id>/depositos")
+@requer_autenticacao
 def api_depositar(conta_id):
     return processar_operacao(conta_id, "deposito")
 
 
 @app.post("/api/contas/<int:conta_id>/saques")
+@requer_autenticacao
 def api_sacar(conta_id):
     return processar_operacao(conta_id, "saque")
 
 
 @app.post("/api/contas/<int:conta_id>/transferencias")
+@requer_autenticacao
 def api_transferir(conta_id):
     dados = request.get_json(silent=True) or {}
     destino_id = dados.get("conta_destino_id")
@@ -178,17 +338,24 @@ def api_transferir(conta_id):
     if destino_id == conta_id:
         return resposta_erro("A conta de origem e destino devem ser diferentes.")
 
+    usuario_id = session["usuario_id"]
     try:
         with conectar() as conn:
-            origem = carregar_conta(conn, conta_id)
-            destino = carregar_conta(conn, destino_id)
+            origem = carregar_conta(conn, conta_id, usuario_id)
+            destino = carregar_conta(conn, destino_id, usuario_id)
             if origem is None or destino is None:
                 return resposta_erro("Conta de origem ou destino não encontrada.", 404)
 
             origem.transferir(destino, valor)
 
-            conn.execute("UPDATE contas SET saldo = ? WHERE id = ?", (f"{origem.saldo:.2f}", origem.id))
-            conn.execute("UPDATE contas SET saldo = ? WHERE id = ?", (f"{destino.saldo:.2f}", destino.id))
+            conn.execute(
+                "UPDATE contas SET saldo = ? WHERE id = ? AND owner_id = ?",
+                (f"{origem.saldo:.2f}", origem.id, usuario_id),
+            )
+            conn.execute(
+                "UPDATE contas SET saldo = ? WHERE id = ? AND owner_id = ?",
+                (f"{destino.saldo:.2f}", destino.id, usuario_id),
+            )
 
             salvar_transacao(
                 conn, origem.id, "TRANSFERENCIA ENVIADA",
@@ -211,9 +378,11 @@ def api_transferir(conta_id):
 
 
 @app.get("/api/contas/<int:conta_id>/extrato")
+@requer_autenticacao
 def api_extrato(conta_id):
+    usuario_id = session["usuario_id"]
     with conectar() as conn:
-        conta = obter_conta(conn, conta_id)
+        conta = obter_conta(conn, conta_id, usuario_id)
         if conta is None:
             return resposta_erro("Conta não encontrada.", 404)
         transacoes = conn.execute(
