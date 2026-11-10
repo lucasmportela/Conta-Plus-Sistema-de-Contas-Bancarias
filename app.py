@@ -226,7 +226,7 @@ def adicionar_cabecalhos_de_seguranca(resposta):
     resposta.headers.setdefault("X-Permitted-Cross-Domain-Policies", "none")
     resposta.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
     if request.path.startswith("/api/") or request.path in {"/confirmar-email", "/redefinir-senha"}:
-        resposta.headers["Cache-Control"] = "no-store"
+        resposta.headers.setdefault("Cache-Control", "no-store")
     if request.path in {"/confirmar-email", "/redefinir-senha"}:
         resposta.headers["Referrer-Policy"] = "no-referrer"
     if request.is_secure:
