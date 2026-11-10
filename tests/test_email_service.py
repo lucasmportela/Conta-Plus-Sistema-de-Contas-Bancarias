@@ -27,11 +27,6 @@ class FakeSMTP:
     def login(self, usuario, senha):
         self.calls.append(("login", usuario, senha))
 
-    def auth(self, mecanismo, authobject, initial_response_ok=True):
-        resposta = authobject(None)
-        self.calls.append(("auth", mecanismo, resposta, initial_response_ok))
-        return 235, b"2.7.0 Authentication successful"
-
     def send_message(self, mensagem):
         self.calls.append(("send_message", mensagem))
 
@@ -44,6 +39,19 @@ class TestEmailService(unittest.TestCase):
             "MAIL_USERNAME": "usuario",
             "MAIL_PASSWORD": "senha-de-teste",
             "MAIL_FROM": "Conta+ <nao-responda@example.test>",
+            "MAIL_USE_TLS": "true",
+            "MAIL_USE_SSL": "false",
+        }
+        valores.update(extra)
+        return patch.dict(os.environ, valores, clear=True)
+
+    def configuracao_gmail(self, **extra):
+        valores = {
+            "MAIL_SERVER": "smtp.gmail.com",
+            "MAIL_PORT": "587",
+            "MAIL_USERNAME": "conta.contaplus@gmail.com",
+            "MAIL_PASSWORD": "abcd efgh ijkl mnop",
+            "MAIL_FROM": "Conta+ <conta.contaplus@gmail.com>",
             "MAIL_USE_TLS": "true",
             "MAIL_USE_SSL": "false",
         }
@@ -96,69 +104,74 @@ class TestEmailService(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "não podem estar ativos juntos"):
                 enviar_email("destino@example.test", "Assunto", "Corpo")
 
-    def test_envia_email_hotmail_com_oauth2_xoauth2(self):
+    def test_envia_email_gmail_com_senha_de_app_e_starttls(self):
         cliente = FakeSMTP()
         contexto = object()
-        configuracao = self.configuracao(
-            MAIL_AUTH_MODE="oauth2",
-            MAIL_SERVER="smtp-mail.outlook.com",
-            MAIL_PORT="587",
-            MAIL_USERNAME="conta@hotmail.com",
-            MAIL_PASSWORD="",
-            MAIL_FROM="Conta+ <conta@hotmail.com>",
-            MAIL_USE_TLS="true",
-            MAIL_USE_SSL="false",
-        )
-        with configuracao, \
+        with self.configuracao_gmail(), \
              patch("email_service.smtplib.SMTP", return_value=cliente) as smtp, \
-             patch("email_service.ssl.create_default_context", return_value=contexto), \
-             patch("hotmail_oauth.obter_token_acesso", return_value="token-falso-de-teste"):
+             patch("email_service.ssl.create_default_context", return_value=contexto):
             enviar_email("destino@example.test", "Assunto", "Corpo")
 
-        smtp.assert_called_once_with("smtp-mail.outlook.com", 587, timeout=10)
+        smtp.assert_called_once_with("smtp.gmail.com", 587, timeout=10)
         self.assertEqual(cliente.calls[0], ("ehlo",))
         self.assertEqual(cliente.calls[1], ("starttls", {"context": contexto}))
         self.assertEqual(cliente.calls[2], ("ehlo",))
-        autenticacao = cliente.calls[3]
-        self.assertEqual(autenticacao[0:2], ("auth", "XOAUTH2"))
         self.assertEqual(
-            autenticacao[2],
-            "user=conta@hotmail.com\x01auth=Bearer token-falso-de-teste\x01\x01",
+            cliente.calls[3],
+            ("login", "conta.contaplus@gmail.com", "abcdefghijklmnop"),
         )
-        self.assertTrue(autenticacao[3])
         self.assertEqual(cliente.calls[4][0], "send_message")
 
-    def test_hotmail_rejeita_remetente_diferente_da_conta_autorizada(self):
-        with self.configuracao(
-            MAIL_AUTH_MODE="oauth2",
-            MAIL_SERVER="smtp-mail.outlook.com",
-            MAIL_USERNAME="conta@hotmail.com",
-            MAIL_FROM="Conta+ <outra@hotmail.com>",
-        ):
+    def test_envia_email_gmail_com_ssl_direto(self):
+        cliente = FakeSMTP()
+        contexto = object()
+        with self.configuracao_gmail(
+            MAIL_PORT="465", MAIL_USE_TLS="false", MAIL_USE_SSL="true"
+        ), \
+             patch("email_service.smtplib.SMTP_SSL", return_value=cliente) as smtp_ssl, \
+             patch("email_service.ssl.create_default_context", return_value=contexto):
+            enviar_email("destino@example.test", "Assunto", "Corpo")
+
+        smtp_ssl.assert_called_once_with(
+            "smtp.gmail.com", 465, timeout=10, context=contexto
+        )
+        self.assertEqual(
+            cliente.calls[0],
+            ("login", "conta.contaplus@gmail.com", "abcdefghijklmnop"),
+        )
+        self.assertEqual(cliente.calls[1][0], "send_message")
+
+    def test_gmail_rejeita_remetente_diferente_da_conta(self):
+        with self.configuracao_gmail(MAIL_FROM="Conta+ <outro@gmail.com>"):
             with self.assertRaisesRegex(RuntimeError, "deve corresponder"):
                 enviar_email("destino@example.test", "Assunto", "Corpo")
 
-    def test_hotmail_nao_aceita_autenticacao_por_senha(self):
-        with self.configuracao(
-            MAIL_AUTH_MODE="password",
-            MAIL_SERVER="smtp-mail.outlook.com",
-            MAIL_USERNAME="conta@hotmail.com",
-            MAIL_PASSWORD="senha-normal",
-            MAIL_FROM="conta@hotmail.com",
-        ):
-            with self.assertRaisesRegex(RuntimeError, "exigem autenticação OAuth2"):
+    def test_gmail_rejeita_senha_de_app_ausente(self):
+        with self.configuracao_gmail(MAIL_PASSWORD=""):
+            with self.assertRaisesRegex(RuntimeError, "senha de app"):
                 enviar_email("destino@example.test", "Assunto", "Corpo")
 
-    def test_hotmail_rejeita_smtp_sem_starttls(self):
-        with self.configuracao(
-            MAIL_AUTH_MODE="oauth2",
-            MAIL_SERVER="smtp-mail.outlook.com",
+    def test_gmail_rejeita_usuario_que_nao_seja_gmail(self):
+        with self.configuracao_gmail(
             MAIL_USERNAME="conta@hotmail.com",
-            MAIL_FROM="conta@hotmail.com",
-            MAIL_USE_TLS="false",
-            MAIL_USE_SSL="false",
+            MAIL_FROM="Conta+ <conta@hotmail.com>",
         ):
-            with self.assertRaisesRegex(RuntimeError, "exige STARTTLS"):
+            with self.assertRaisesRegex(RuntimeError, "@gmail.com"):
+                enviar_email("destino@example.test", "Assunto", "Corpo")
+
+    def test_gmail_rejeita_porta_sem_transporte_seguro_suportado(self):
+        with self.configuracao_gmail(MAIL_PORT="2525"):
+            with self.assertRaisesRegex(RuntimeError, "porta 587|porta 465"):
+                enviar_email("destino@example.test", "Assunto", "Corpo")
+
+    def test_gmail_rejeita_oauth2_microsoft_obsoleto(self):
+        with self.configuracao_gmail(MAIL_AUTH_MODE="oauth2"):
+            with self.assertRaisesRegex(RuntimeError, "OAuth2 da Microsoft foi removida"):
+                enviar_email("destino@example.test", "Assunto", "Corpo")
+
+    def test_gmail_rejeita_porta_587_sem_starttls(self):
+        with self.configuracao_gmail(MAIL_USE_TLS="false", MAIL_USE_SSL="true"):
+            with self.assertRaisesRegex(RuntimeError, "porta 587|porta 465"):
                 enviar_email("destino@example.test", "Assunto", "Corpo")
 
 
