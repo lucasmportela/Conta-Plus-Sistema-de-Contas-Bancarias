@@ -11,6 +11,7 @@ from datetime import timedelta
 from hashlib import sha256
 from urllib.parse import urlencode, urljoin
 
+from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -23,6 +24,7 @@ from email_service import enviar_email
 from rate_limit import LoginRateLimiter
 
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
@@ -42,6 +44,9 @@ if APP_ENV == "production":
         raise RuntimeError("Configure TRUSTED_HOSTS com os domínios permitidos.")
     if not PUBLIC_BASE_URL.startswith("https://"):
         raise RuntimeError("Configure PUBLIC_BASE_URL com a URL HTTPS pública.")
+    public_host = PUBLIC_BASE_URL.split("://", 1)[1].split("/", 1)[0].split(":", 1)[0].lower()
+    if public_host not in {host.lower() for host in TRUSTED_HOSTS}:
+        raise RuntimeError("O domínio de PUBLIC_BASE_URL também deve constar em TRUSTED_HOSTS.")
     if not os.getenv("MAIL_SERVER") or not os.getenv("MAIL_FROM"):
         raise RuntimeError("Configure MAIL_SERVER e MAIL_FROM para envio de e-mails.")
 if not SECRET_KEY:
@@ -207,12 +212,15 @@ def adicionar_cabecalhos_de_seguranca(resposta):
         "connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; "
         "form-action 'self'",
     )
-    if request.path in {"/confirmar-email", "/redefinir-senha"}:
+    resposta.headers.setdefault("X-Permitted-Cross-Domain-Policies", "none")
+    resposta.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    if request.path.startswith("/api/") or request.path in {"/confirmar-email", "/redefinir-senha"}:
         resposta.headers["Cache-Control"] = "no-store"
+    if request.path in {"/confirmar-email", "/redefinir-senha"}:
         resposta.headers["Referrer-Policy"] = "no-referrer"
     if request.is_secure:
         resposta.headers.setdefault(
-            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+            "Strict-Transport-Security", "max-age=31536000"
         )
     return resposta
 
@@ -328,6 +336,7 @@ def api_confirmar_email():
 
     agora = int(time.time())
     with conectar() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         registro = conn.execute(
             """
             SELECT user_id FROM email_verification_tokens
@@ -441,6 +450,7 @@ def api_redefinir_senha():
     agora = int(time.time())
     token_hash = hash_token(token)
     with conectar() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         registro = conn.execute(
             """
             SELECT user_id FROM password_reset_tokens
