@@ -83,7 +83,7 @@ O workflow Teste SMTP do provedor real é manual e envia uma única mensagem par
 
 ### Executar o container localmente
 
-Construa a imagem com docker build -t conta-plus .. Para executar em modo de produção, configure as variáveis obrigatórias de segredo, HTTPS, host, proxy e SMTP, monte um volume persistente em /data e mantenha apenas uma instância enquanto o banco principal for SQLite. O container roda como usuário não-root e usa Gunicorn. Consulte SECURITY.md antes de configurar um ambiente real.
+Construa a imagem com docker build -t conta-plus .. Para executar em modo de produção, configure as variáveis obrigatórias de segredo, HTTPS, host, proxy e SMTP, monte um volume persistente em /data com proprietário UID/GID 10001 (usuário appuser) e mantenha apenas uma instância enquanto o banco principal for SQLite. O container roda como usuário não-root e usa Gunicorn. Consulte SECURITY.md antes de configurar um ambiente real.
 
 A integração Mailpit valida o transporte e o recebimento local, mas não substitui o teste com o provedor SMTP real. A revisão técnica preliminar está em docs/SECURITY_REVIEW.md; ela não é auditoria independente nem parecer jurídico.
 

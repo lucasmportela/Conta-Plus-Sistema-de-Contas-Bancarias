@@ -51,7 +51,7 @@ A interface deixou de carregar Google Fonts de terceiros, reduzindo uma transfer
 
 - Os testes de Mailpit demonstram conexão SMTP e recebimento em servidor local de captura, não entregabilidade na Internet.
 - O workflow SMTP do provedor real é manual, exige confirmação explícita de envio e só executa quando MAIL_SERVER, MAIL_FROM e SMTP_TEST_RECIPIENT estão cadastrados como secrets no GitHub Actions. Ele envia uma única mensagem ao destinatário explicitamente configurado.
-- O teste de container verifica a configuração de produção em CI, não a infraestrutura de um provedor de hospedagem.
+- O container executa como UID 10001 sem privilégios; o volume persistente precisa ser montado com propriedade/permissões para UID/GID 10001. O teste de container verifica a configuração de produção em CI, não a infraestrutura de um provedor de hospedagem.
 - pip-audit detecta vulnerabilidades conhecidas nas dependências resolvidas; Bandit é análise estática, não prova ausência de falhas.
 - Nenhum teste deve usar dados bancários reais.
 

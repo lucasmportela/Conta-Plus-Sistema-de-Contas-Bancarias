@@ -89,6 +89,7 @@ jobs:
       - name: Executar container com configuração de produção
         run: |
           mkdir -p "$RUNNER_TEMP/conta-plus-data"
+          sudo chown -R 10001:10001 "$RUNNER_TEMP/conta-plus-data"
           docker run -d --name conta-plus-ci             -p 127.0.0.1:10000:10000             -v "$RUNNER_TEMP/conta-plus-data:/data"             -e APP_ENV=production             -e SECRET_KEY=ci-only-secret-key-0123456789-abcdef             -e PUBLIC_BASE_URL=https://localhost             -e TRUSTED_HOSTS=localhost             -e TRUSTED_PROXY_HOPS=1             -e MAIL_SERVER=127.0.0.1             -e MAIL_PORT=1025             -e MAIL_FROM=nao-responda@localhost             -e MAIL_USE_TLS=true             -e MAIL_USE_SSL=false             conta-plus:ci
           for tentativa in $(seq 1 30); do
             if curl -fsS -H 'Host: localhost' -H 'X-Forwarded-Proto: https'               http://127.0.0.1:10000/api/health >/dev/null; then

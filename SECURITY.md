@@ -46,7 +46,7 @@ A rota `GET /api/account/export` exige sessão autenticada e entrega um arquivo 
 - Configurar `SECRET_KEY` forte e persistente, `PUBLIC_BASE_URL` HTTPS, `TRUSTED_HOSTS` e `TRUSTED_PROXY_HOPS` com os valores reais do provedor.
 - Configurar SMTP com credenciais secretas, TLS ou SSL, remetente autorizado e entrega monitorada.
 - Configurar Redis gerenciado e compartilhado se houver mais de uma instância. O backend Redis compartilha somente os contadores de autenticação; SQLite não é adequado como banco principal compartilhado entre várias instâncias. Migrar dados da aplicação para PostgreSQL antes de escalar horizontalmente.
-- Configurar armazenamento persistente, backups criptografados, restauração testada, monitoramento e alertas.
+- Configurar armazenamento persistente em /data com permissões para UID/GID 10001 (usuário não-root appuser), backups criptografados, restauração testada, monitoramento e alertas.
 - Definir e testar a retenção de backups e logs após autoexclusão. Os dados operacionais são removidos do banco ativo, mas cópias de segurança podem persistir até o fim do prazo de retenção.
 - Validar domínio e e-mail do remetente, SPF, DKIM e DMARC.
 - Testar os fluxos de confirmação e recuperação com o provedor SMTP real, incluindo falhas temporárias, rejeições e reenvio.
