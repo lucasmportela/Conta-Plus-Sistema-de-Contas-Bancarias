@@ -305,7 +305,9 @@ As rotas protegidas exigem sessão autenticada. Requisições POST, PUT, PATCH e
 
 A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integração criam bancos SQLite temporários, isolados dos dados locais da aplicação.
 
-**Total: 58 testes automatizados — 8 testes unitários das regras de negócio, 34 testes de integração das rotas Flask, 9 testes da camada SQLite, 3 testes do backend de limitação com Redis e 4 testes do serviço de e-mail SMTP.**
+**Suíte principal: 58 testes automatizados — 8 testes unitários das regras de negócio, 34 testes de integração das rotas Flask, 9 testes da camada SQLite, 3 testes do backend de limitação com Redis simulado e 4 testes do serviço de e-mail SMTP simulado.**
+
+**Integração operacional adicional: 4 testes — 3 contra Redis real e 1 contra Mailpit local.** Eles são executados pelo workflow operacional; ao rodar somente a suíte principal sem serviços configurados, aparecem como ignorados (*skipped*).
 
 **Cobertura:**
 
