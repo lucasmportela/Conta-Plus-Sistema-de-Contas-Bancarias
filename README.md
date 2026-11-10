@@ -218,13 +218,13 @@ As rotas protegidas exigem sessão autenticada. Requisições POST, PUT, PATCH e
 
 A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integração criam bancos SQLite temporários, isolados dos dados locais da aplicação.
 
-**Total: 36 testes automatizados — 8 testes unitários das regras de negócio, 20 testes de integração das rotas Flask e 8 testes da camada SQLite.**
+**Total: 37 testes automatizados — 8 testes unitários das regras de negócio, 20 testes de integração das rotas Flask e 9 testes da camada SQLite.**
 
 **Cobertura:**
 
 - **Testes unitários (`test_conta.py`):** regras de depósito, saque, transferência e validação de valores.
 - **Testes das rotas (`test_api.py`):** cadastro, login, logout, hash de senha, bloqueio após falhas consecutivas, expiração do bloqueio, reinício do contador após login válido, isolamento por IP, CSRF, autenticação obrigatória, isolamento entre usuários, contas e movimentações.
-- **Testes do banco (`test_database.py`):** criação de tabelas e índices, persistência, commit, rollback, unicidade, integridade referencial, consultas por proprietário e migração de banco legado.
+- **Testes do banco (`test_database.py`):** criação de tabelas e índices, persistência, commit, rollback, unicidade, integridade referencial, consultas por proprietário, migração de banco legado e concorrência no bloqueio de login.
 
 Execute toda a suíte a partir da raiz do repositório (a pasta que contém `app.py`, `conta.py` e `tests/`):
 
