@@ -55,6 +55,18 @@ if APP_ENV == "production":
     mail_ssl = os.getenv("MAIL_USE_SSL", "false").strip().lower() in {"1", "true", "yes", "on"}
     if mail_tls == mail_ssl:
         raise RuntimeError("Em produção, habilite exatamente uma opção: MAIL_USE_TLS ou MAIL_USE_SSL.")
+    mail_auth_mode = os.getenv("MAIL_AUTH_MODE", "password").strip().lower()
+    if mail_auth_mode not in {"password", "oauth2"}:
+        raise RuntimeError("MAIL_AUTH_MODE deve ser password ou oauth2.")
+    if mail_auth_mode == "oauth2":
+        if os.getenv("MAIL_SERVER", "").strip().lower() != "smtp-mail.outlook.com":
+            raise RuntimeError("Para Hotmail, MAIL_SERVER deve ser smtp-mail.outlook.com.")
+        if os.getenv("MAIL_PORT", "587").strip() != "587" or not mail_tls or mail_ssl:
+            raise RuntimeError("Para Hotmail, configure porta 587 com STARTTLS.")
+        if not os.getenv("MAIL_USERNAME", "").strip().lower().endswith("@hotmail.com"):
+            raise RuntimeError("MAIL_USERNAME deve conter a conta pessoal @hotmail.com.")
+        if not os.getenv("MS_CLIENT_ID") or not os.getenv("MS_TOKEN_CACHE_ENCRYPTION_KEY"):
+            raise RuntimeError("Configure MS_CLIENT_ID e MS_TOKEN_CACHE_ENCRYPTION_KEY.")
 if not SECRET_KEY:
     SECRET_KEY = secrets.token_hex(32)
 
