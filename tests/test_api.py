@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -64,9 +65,7 @@ class TestApiIntegration(unittest.TestCase):
     def token_do_email(self, indice=-1):
         corpo = self.emails[indice][2]
         link = re.search(r"https?://\\S+", corpo).group(0)
-        return __import__("urllib.parse", fromlist=["parse_qs", "urlparse"]).parse_qs(
-            __import__("urllib.parse", fromlist=["urlparse"]).urlparse(link).query
-        )["token"][0]
+        return parse_qs(urlparse(link).query)["token"][0]
 
     def registrar(
         self,
