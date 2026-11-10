@@ -79,6 +79,20 @@ jobs:
           MAILPIT_API_URL: http://127.0.0.1:8025/api/v1/messages
         run: python -m unittest discover -s tests -p "test_email_service_integration.py" -v
 
+      - name: Validar confirmação, reenvio e recuperação por SMTP
+        env:
+          SECRET_KEY: ci-only-email-flow-secret-key-0123456789-abcdef
+          MAIL_SERVER: 127.0.0.1
+          MAIL_PORT: "1025"
+          MAIL_USERNAME: ""
+          MAIL_PASSWORD: ""
+          MAIL_FROM: "Conta+ Teste <nao-responda@conta-plus.test>"
+          MAIL_USE_TLS: "false"
+          MAIL_USE_SSL: "false"
+          SMTP_TEST_RECIPIENT: "fluxos@conta-plus.test"
+          MAILPIT_API_URL: http://127.0.0.1:8025/api/v1/messages
+        run: python -m unittest discover -s tests -p "test_email_flows_integration.py" -v
+
   backup-restore:
     name: Backup e restauração SQLite com dados sintéticos
     runs-on: ubuntu-latest
