@@ -217,9 +217,9 @@ Linux/macOS:
 cp .env.example .env
 ```
 
-Edite `.env` com os dados reais do seu provedor SMTP. O arquivo é carregado automaticamente pelo projeto e já está no `.gitignore`. Não envie credenciais SMTP ou chaves para o GitHub. Sem SMTP configurado, a aplicação não consegue enviar links de confirmação ou recuperação e o cadastro retorna erro de serviço.
+Edite `.env` com os dados da sua conta Hotmail e do aplicativo Microsoft. O arquivo é carregado automaticamente pelo projeto e já está no `.gitignore`. Siga o guia [Configurar Hotmail no Conta+](docs/HOTMAIL_OAUTH_SETUP.md), que explica o registro do aplicativo, a geração da chave Fernet e a autorização OAuth2. Não envie senha, token, cache OAuth ou chaves para o GitHub.
 
-Para testes locais, também é possível usar um servidor SMTP de desenvolvimento, como Mailpit, configurando host, porta e remetente conforme o ambiente local.
+Para testes locais sem enviar mensagens à Internet, o workflow operacional utiliza Mailpit. O teste Hotmail real é manual, envia apenas uma mensagem para uma caixa de teste autorizada e exige autorização OAuth2 prévia.
 
 ### 5. Abra a aplicação
 
@@ -307,9 +307,9 @@ As rotas protegidas exigem sessão autenticada. Requisições POST, PUT, PATCH e
 
 A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integração criam bancos SQLite temporários, isolados dos dados locais da aplicação.
 
-**Suíte principal: 63 testes automatizados — 8 testes unitários das regras de negócio, 34 testes de integração das rotas Flask, 9 testes da camada SQLite, 3 testes do backend de limitação com Redis simulado, 4 testes do serviço de e-mail SMTP simulado e 5 testes de backup/restauração SQLite.**
+**Suíte principal: 66 testes automatizados — 8 testes unitários das regras de negócio, 34 testes de integração das rotas Flask, 9 testes da camada SQLite, 3 testes do backend de limitação com Redis simulado, 7 testes do serviço de e-mail SMTP/OAuth2 simulado e 5 testes de backup/restauração SQLite.**
 
-**Integração operacional adicional: 4 testes — 3 contra Redis real e 1 contra Mailpit local.** Eles são executados pelo workflow operacional; ao rodar a suíte Python sem serviços configurados, aparecem como ignorados (*skipped*). **Total: 67 testes distintos**, todos aprovados em seus respectivos jobs do CI.
+**Integração operacional adicional: 4 testes — 3 contra Redis real e 1 contra Mailpit local.** Eles são executados pelo workflow operacional; ao rodar a suíte Python sem serviços configurados, aparecem como ignorados (*skipped*). **Total: 70 testes distintos**, todos aprovados em seus respectivos jobs do CI.
 
 Os testes de backup/restauração usam registros sintéticos, verificam a integridade SQLite e garantem que a restauração não sobrescreva arquivos existentes. Eles não configuram backup externo nem comprovam recuperação em produção. Consulte docs/BACKUP_RESTORE.md.
 
@@ -319,7 +319,7 @@ Os testes de backup/restauração usam registros sintéticos, verificam a integr
 - **Testes das rotas (`test_api.py`):** cadastro pendente, confirmação e expiração de tokens, reenvio de confirmação, login bloqueado até confirmar e-mail, recuperação e redefinição de senha, uso único de tokens, revogação de sessões, respostas contra enumeração, limitação de tentativas, CSRF, autorização, isolamento de dados, exportação JSON dos próprios dados e exclusão segura da própria conta.
 - **Testes do banco (`test_database.py`):** criação de tabelas e índices, persistência, commit, rollback, unicidade, integridade referencial, consultas por proprietário, migração de banco legado e concorrência no bloqueio de login.
 - **Testes do limitador (`test_rate_limit.py`):** configuração do backend Redis, validação da URL, execução atômica dos scripts Lua e remoção dos contadores após autenticação bem-sucedida.
-- **Testes de e-mail (`test_email_service.py`):** envio por STARTTLS e SSL, autenticação SMTP e rejeição de configurações inválidas.
+- **Testes de e-mail (`test_email_service.py`):** envio por STARTTLS e SSL, autenticação básica simulada, autenticação Hotmail OAuth2/XOAUTH2, validação de remetente e exigência de STARTTLS.
 
 Execute toda a suíte a partir da raiz do repositório (a pasta que contém `app.py`, `conta.py` e `tests/`):
 
