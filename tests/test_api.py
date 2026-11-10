@@ -62,6 +62,13 @@ class TestApiIntegration(unittest.TestCase):
             headers={"X-CSRF-Token": self.token_csrf(client)},
         )
 
+    def delete_json(self, client, rota, dados):
+        return client.delete(
+            rota,
+            json=dados,
+            headers={"X-CSRF-Token": self.token_csrf(client)},
+        )
+
     def token_do_email(self, indice=-1):
         corpo = self.emails[indice][2]
         link = re.search(r"https?://\S+", corpo).group(0)
@@ -609,6 +616,184 @@ class TestApiIntegration(unittest.TestCase):
         extrato = self.client.get("/api/contas/9999/extrato")
         self.assertEqual(deposito.status_code, 404)
         self.assertEqual(extrato.status_code, 404)
+
+    def test_exclusao_exige_autenticacao_e_csrf(self):
+        anonimo = app_module.app.test_client()
+        sem_csrf = anonimo.delete(
+            "/api/account",
+            json={"senha_atual": "SenhaSegura123", "confirmacao": "EXCLUIR"},
+        )
+        self.assertEqual(sem_csrf.status_code, 403)
+
+        com_csrf = self.delete_json(
+            anonimo,
+            "/api/account",
+            {"senha_atual": "SenhaSegura123", "confirmacao": "EXCLUIR"},
+        )
+        self.assertEqual(com_csrf.status_code, 401)
+
+    def test_exclusao_exige_confirmacao_explicita(self):
+        conta = self.criar_conta(numero="EXCLUIR-01", saldo_inicial="25.00")
+        resposta = self.delete_json(
+            self.client,
+            "/api/account",
+            {"senha_atual": "SenhaSegura123", "confirmacao": "EXCLUIR AGORA"},
+        )
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIsNotNone(self.client.get("/api/me").get_json()["usuario"])
+        self.assertEqual(len(self.client.get("/api/contas").get_json()), 1)
+        self.assertEqual(self.client.get(f"/api/contas/{conta['id']}/extrato").status_code, 200)
+
+    def test_exclusao_exige_senha_atual_correta(self):
+        conta = self.criar_conta(numero="EXCLUIR-02", saldo_inicial="40.00")
+        resposta = self.delete_json(
+            self.client,
+            "/api/account",
+            {"senha_atual": "SenhaErrada123", "confirmacao": "EXCLUIR"},
+        )
+        self.assertEqual(resposta.status_code, 403)
+        self.assertEqual(len(self.client.get("/api/contas").get_json()), 1)
+        self.assertEqual(self.client.get(f"/api/contas/{conta['id']}/extrato").status_code, 200)
+        self.assertEqual(self.client.get("/api/me").status_code, 200)
+
+    def test_exclusao_remove_historico_tokens_e_dados_associados_sem_afetar_terceiros(self):
+        conta_a = self.criar_conta(numero="EXCLUIR-A", saldo_inicial="100.00")
+        conta_b = self.criar_conta(numero="EXCLUIR-B", saldo_inicial="20.00")
+        transferencia = self.post_json(
+            self.client,
+            f"/api/contas/{conta_a['id']}/transferencias",
+            {"conta_destino_id": conta_b["id"], "valor": "10.00"},
+        )
+        self.assertEqual(transferencia.status_code, 200)
+        usuario_id = self.client.get("/api/me").get_json()["usuario"]["id"]
+
+        cliente_terceiro = app_module.app.test_client()
+        self.registrar(
+            cliente_terceiro,
+            nome="Marina Souza",
+            email="terceiro-exclusao@example.com",
+            senha="SenhaSegura456",
+        )
+        conta_terceiro = self.criar_conta(
+            cliente_terceiro,
+            nome="Marina Souza",
+            numero="TERCEIRO-01",
+            saldo_inicial="50.00",
+        )
+        with database.conectar() as conn:
+            agora = 1_800_000_000
+            conn.execute(
+                """
+                INSERT INTO email_verification_tokens
+                    (token_hash, user_id, expires_at, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                ("hash-confirmacao-exclusao", usuario_id, agora + 3600, agora),
+            )
+            conn.execute(
+                """
+                INSERT INTO password_reset_tokens
+                    (token_hash, user_id, expires_at, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                ("hash-recuperacao-exclusao", usuario_id, agora + 1800, agora),
+            )
+            # Simula referência histórica antiga/cruzada: ela deve ser anonimizada
+            # sem apagar o lançamento que pertence ao outro usuário.
+            conn.execute(
+                """
+                INSERT INTO transacoes
+                    (conta_id, tipo, descricao, valor, saldo_anterior, saldo_atual,
+                     conta_relacionada_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    conta_terceiro["id"], "TRANSFERENCIA RECEBIDA",
+                    "Transferência recebida de Lucas Martins (conta EXCLUIR-A)",
+                    "1.00", "50.00", "51.00", conta_a["id"],
+                ),
+            )
+
+        resposta = self.delete_json(
+            self.client,
+            "/api/account",
+            {"senha_atual": "SenhaSegura123", "confirmacao": "EXCLUIR"},
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("excluídos", resposta.get_json()["mensagem"])
+
+        with database.conectar() as conn:
+            usuario = conn.execute(
+                "SELECT id FROM usuarios WHERE id = ?", (usuario_id,)
+            ).fetchone()
+            contas_remanescentes = conn.execute(
+                "SELECT id FROM contas WHERE owner_id = ?", (usuario_id,)
+            ).fetchall()
+            historico_proprio = conn.execute(
+                """
+                SELECT COUNT(*) FROM transacoes
+                WHERE conta_id IN (?, ?) OR conta_relacionada_id IN (?, ?)
+                """,
+                (conta_a["id"], conta_b["id"], conta_a["id"], conta_b["id"]),
+            ).fetchone()[0]
+            tokens = conn.execute(
+                """
+                SELECT
+                    (SELECT COUNT(*) FROM email_verification_tokens WHERE user_id = ?) +
+                    (SELECT COUNT(*) FROM password_reset_tokens WHERE user_id = ?)
+                """,
+                (usuario_id, usuario_id),
+            ).fetchone()[0]
+            usuario_terceiro = conn.execute(
+                "SELECT id FROM usuarios WHERE email = ?",
+                ("terceiro-exclusao@example.com",),
+            ).fetchone()
+            conta_terceiro_preservada = conn.execute(
+                "SELECT id FROM contas WHERE id = ? AND owner_id = ?",
+                (conta_terceiro["id"], usuario_terceiro["id"]),
+            ).fetchone()
+            historico_terceiro = conn.execute(
+                """
+                SELECT descricao, conta_relacionada_id
+                FROM transacoes
+                WHERE conta_id = ? AND descricao = ?
+                """,
+                (
+                    conta_terceiro["id"],
+                    "Movimentação relacionada a uma conta removida",
+                ),
+            ).fetchone()
+
+        self.assertIsNone(usuario)
+        self.assertEqual(contas_remanescentes, [])
+        self.assertEqual(historico_proprio, 0)
+        self.assertEqual(tokens, 0)
+        self.assertIsNotNone(usuario_terceiro)
+        self.assertIsNotNone(conta_terceiro_preservada)
+        self.assertIsNotNone(historico_terceiro)
+        self.assertIsNone(historico_terceiro["conta_relacionada_id"])
+        self.assertEqual(self.client.get("/api/me").status_code, 401)
+        self.assertEqual(cliente_terceiro.get("/api/me").status_code, 200)
+
+    def test_exclusao_limita_tentativas_de_senha_atual_incorreta(self):
+        instante = 1_700_000_000
+        dados = {"senha_atual": "SenhaErrada123", "confirmacao": "EXCLUIR"}
+        with patch("app.time.time", return_value=instante):
+            for tentativa in range(5):
+                resposta = self.delete_json(self.client, "/api/account", dados)
+                if tentativa < 4:
+                    self.assertEqual(resposta.status_code, 403)
+                else:
+                    self.assertEqual(resposta.status_code, 429)
+                    self.assertEqual(resposta.headers.get("Retry-After"), "900")
+
+        with patch("app.time.time", return_value=instante + 901):
+            resposta = self.delete_json(
+                self.client,
+                "/api/account",
+                {"senha_atual": "SenhaSegura123", "confirmacao": "EXCLUIR"},
+            )
+        self.assertEqual(resposta.status_code, 200)
 
 
 if __name__ == "__main__":
