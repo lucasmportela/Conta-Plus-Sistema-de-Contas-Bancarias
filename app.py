@@ -578,6 +578,81 @@ def api_me():
     return jsonify({"usuario": dict(usuario)})
 
 
+
+
+@app.get("/api/account/export")
+@requer_autenticacao
+def api_exportar_dados():
+    """Baixa uma cópia JSON dos dados pertencentes ao usuário autenticado."""
+    usuario_id = session["usuario_id"]
+    with conectar() as conn:
+        usuario = conn.execute(
+            "SELECT nome, email, email_verified, criado_em FROM usuarios WHERE id = ?",
+            (usuario_id,),
+        ).fetchone()
+        if usuario is None:
+            session.clear()
+            return resposta_erro("Sessão inválida. Entre novamente.", 401)
+
+        contas = conn.execute(
+            """
+            SELECT id, nome, numero, saldo, criada_em
+            FROM contas
+            WHERE owner_id = ?
+            ORDER BY id
+            """,
+            (usuario_id,),
+        ).fetchall()
+        transacoes = conn.execute(
+            """
+            SELECT
+                t.id,
+                t.conta_id,
+                t.tipo,
+                t.descricao,
+                t.valor,
+                t.saldo_anterior,
+                t.saldo_atual,
+                CASE
+                    WHEN relacionada.owner_id = ? THEN t.conta_relacionada_id
+                    ELSE NULL
+                END AS conta_relacionada_id,
+                t.criado_em
+            FROM transacoes AS t
+            INNER JOIN contas AS propria ON propria.id = t.conta_id
+            LEFT JOIN contas AS relacionada ON relacionada.id = t.conta_relacionada_id
+            WHERE propria.owner_id = ?
+            ORDER BY t.id
+            """,
+            (usuario_id, usuario_id),
+        ).fetchall()
+
+    exportacao = {
+        "produto": "Conta+",
+        "versao_exportacao": 1,
+        "exportado_em": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "usuario": {
+            "nome": usuario["nome"],
+            "email": usuario["email"],
+            "email_confirmado": bool(usuario["email_verified"]),
+            "criado_em": usuario["criado_em"],
+        },
+        "contas": [dict(conta) for conta in contas],
+        "transacoes": [dict(transacao) for transacao in transacoes],
+        "observacao": (
+            "Esta cópia contém somente dados associados às contas do usuário autenticado. "
+            "Senhas, hashes de senha, tokens, sessões e contadores de segurança não são incluídos."
+        ),
+    }
+
+    resposta = jsonify(exportacao)
+    nome_arquivo = time.strftime("conta-plus-dados-%Y%m%d.json", time.gmtime())
+    resposta.headers["Content-Disposition"] = f'attachment; filename="{nome_arquivo}"'
+    resposta.headers["Cache-Control"] = "no-store, private"
+    resposta.headers["Pragma"] = "no-cache"
+    return resposta
+
+
 @app.get("/api/resumo")
 @requer_autenticacao
 def resumo():

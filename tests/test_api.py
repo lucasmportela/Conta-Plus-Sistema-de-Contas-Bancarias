@@ -618,6 +618,99 @@ class TestApiIntegration(unittest.TestCase):
         self.assertEqual(deposito.status_code, 404)
         self.assertEqual(extrato.status_code, 404)
 
+    def test_exportacao_exige_autenticacao(self):
+        anonimo = app_module.app.test_client()
+        resposta = anonimo.get("/api/account/export")
+        self.assertEqual(resposta.status_code, 401)
+
+    def test_exportacao_sem_contas_retorna_json_vazio_e_sem_cache(self):
+        resposta = self.client.get("/api/account/export")
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.mimetype, "application/json")
+        self.assertTrue(
+            resposta.headers["Content-Disposition"].startswith(
+                'attachment; filename="conta-plus-dados-'
+            )
+        )
+        self.assertEqual(resposta.headers["Cache-Control"], "no-store, private")
+        self.assertEqual(resposta.headers["Pragma"], "no-cache")
+        dados = resposta.get_json()
+        self.assertEqual(dados["contas"], [])
+        self.assertEqual(dados["transacoes"], [])
+        self.assertEqual(dados["usuario"]["email"], "lucas@example.com")
+        self.assertIn("exportado_em", dados)
+
+    def test_exportacao_contem_apenas_dados_proprios_e_omite_segredos(self):
+        conta_propria = self.criar_conta(
+            numero="EXPORT-PROPRIA", saldo_inicial="100.00"
+        )
+        deposito = self.post_json(
+            self.client,
+            f"/api/contas/{conta_propria['id']}/depositos",
+            {"valor": "25.00"},
+        )
+        self.assertEqual(deposito.status_code, 200)
+
+        cliente_terceiro = app_module.app.test_client()
+        self.registrar(
+            cliente_terceiro,
+            nome="Marina Souza",
+            email="exportacao-terceiro@example.com",
+            senha="SenhaSegura456",
+        )
+        conta_terceiro = self.criar_conta(
+            cliente_terceiro,
+            nome="Marina Souza",
+            numero="EXPORT-TERCEIRO",
+            saldo_inicial="50.00",
+        )
+
+        with database.conectar() as conn:
+            conn.execute(
+                """
+                INSERT INTO transacoes
+                    (conta_id, tipo, descricao, valor, saldo_anterior, saldo_atual,
+                     conta_relacionada_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    conta_propria["id"],
+                    "REFERENCIA LEGADA",
+                    "Movimentação com referência externa",
+                    "1.00",
+                    "125.00",
+                    "126.00",
+                    conta_terceiro["id"],
+                ),
+            )
+
+        resposta = self.client.get("/api/account/export")
+        self.assertEqual(resposta.status_code, 200)
+        dados = resposta.get_json()
+
+        self.assertEqual(dados["usuario"]["nome"], "Lucas Martins")
+        self.assertEqual(dados["usuario"]["email"], "lucas@example.com")
+        self.assertEqual(
+            [conta["id"] for conta in dados["contas"]],
+            [conta_propria["id"]],
+        )
+        self.assertTrue(dados["transacoes"])
+        self.assertEqual(
+            {transacao["conta_id"] for transacao in dados["transacoes"]},
+            {conta_propria["id"]},
+        )
+        referencia_legada = next(
+            transacao for transacao in dados["transacoes"]
+            if transacao["tipo"] == "REFERENCIA LEGADA"
+        )
+        self.assertIsNone(referencia_legada["conta_relacionada_id"])
+        self.assertNotIn("senha_hash", dados["usuario"])
+        self.assertNotIn("session_version", dados["usuario"])
+        self.assertNotIn("tokens", dados)
+        self.assertNotIn("tentativas_login", dados)
+        self.assertEqual(self.client.get("/api/me").status_code, 200)
+
+
     def test_exclusao_exige_autenticacao_e_csrf(self):
         anonimo = app_module.app.test_client()
         sem_csrf = anonimo.delete(

@@ -6,7 +6,7 @@ Este repositório é um projeto educacional e **não está liberado para disponi
 
 ## Resultado da revisão atual
 
-- GitHub Actions: **55 testes automatizados aprovados** na execução mais recente.
+- GitHub Actions: **58 testes automatizados aprovados** na execução mais recente.
 - Os testes de Redis usam um cliente simulado e verificam os scripts Lua e a configuração; ainda falta um teste de integração contra uma instância Redis real.
 - O fluxo SMTP tem testes automatizados para STARTTLS, SSL e rejeição de configurações conflitantes; a entrega real ainda depende de validar o provedor, domínio e reputação do remetente.
 - HTTPS, cookies Secure, HSTS e ProxyFix estão protegidos por validações de configuração em produção, mas ainda precisam ser exercitados no ambiente real do provedor, com a topologia de proxy confirmada.
@@ -25,8 +25,13 @@ Este repositório é um projeto educacional e **não está liberado para disponi
 - Identificação do cliente baseada em `ProxyFix` somente quando a aplicação está em produção e a quantidade de proxies confiáveis é explicitamente configurada.
 - Lista de hosts permitidos, HTTPS obrigatório em produção, cookies Secure/HttpOnly/SameSite e HSTS.
 - Proteção CSRF, isolamento por proprietário e cabeçalhos CSP, X-Frame-Options, nosniff e Referrer-Policy.
+- Exportação autenticada em JSON, com somente dados do titular, referências a contas externas omitidas e cabeçalhos `no-store`; hashes, senhas, tokens, sessões e contadores de segurança não são exportados.
 - Autoexclusão autenticada com senha atual, confirmação explícita, limitação de tentativas e remoção transacional de cadastro, contas, histórico e tokens.
 - Política de privacidade publicada no caminho `/privacidade`.
+
+## Exportação e proteção da cópia
+
+A rota `GET /api/account/export` exige sessão autenticada e entrega um arquivo JSON como anexo, com `Cache-Control: no-store`. A exportação contém nome, e-mail, estado de confirmação, data de cadastro, contas e movimentações pertencentes ao usuário. Referências a contas de terceiros são omitidas. Senhas, hashes, tokens, dados de sessão e contadores técnicos não são incluídos. O arquivo é gerado em memória e não é persistido no servidor; depois do download, o usuário deve proteger a cópia no dispositivo e removê-la de locais compartilhados quando não precisar mais dela.
 
 ## Pré-requisitos para produção
 
