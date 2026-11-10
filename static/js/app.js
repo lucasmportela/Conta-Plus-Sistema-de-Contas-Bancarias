@@ -57,12 +57,17 @@ async function atualizarTokenCsrf() {
   csrfToken = dados.csrf_token;
 }
 
-function mostrarAutenticacao() {
+function mostrarTelaAutenticacao(tela) {
   elemento("app-shell").classList.add("hidden");
   elemento("auth-view").classList.remove("hidden");
-  elemento("auth-login").classList.remove("hidden");
-  elemento("auth-register").classList.add("hidden");
+  ["auth-login", "auth-register", "auth-recovery", "auth-reset"].forEach(id => {
+    elemento(id).classList.toggle("hidden", id !== tela);
+  });
   elemento("auth-feedback").textContent = "";
+}
+
+function mostrarAutenticacao() {
+  mostrarTelaAutenticacao("auth-login");
 }
 
 function mostrarFeedbackAutenticacao(mensagem) {
@@ -77,15 +82,11 @@ async function abrirPainel(usuario) {
 }
 
 elemento("mostrar-registro").addEventListener("click", () => {
-  elemento("auth-login").classList.add("hidden");
-  elemento("auth-register").classList.remove("hidden");
-  mostrarFeedbackAutenticacao("");
+  mostrarTelaAutenticacao("auth-register");
 });
 
 elemento("mostrar-login").addEventListener("click", () => {
-  elemento("auth-register").classList.add("hidden");
-  elemento("auth-login").classList.remove("hidden");
-  mostrarFeedbackAutenticacao("");
+  mostrarTelaAutenticacao("auth-login");
 });
 
 elemento("form-login").addEventListener("submit", async evento => {
@@ -108,11 +109,67 @@ elemento("form-registro").addEventListener("submit", async evento => {
   const formulario = evento.currentTarget;
   const dados = Object.fromEntries(new FormData(formulario).entries());
   try {
-    await requisicao("/register", { method: "POST", body: JSON.stringify(dados) });
-    await atualizarTokenCsrf();
-    const sessao = await requisicao("/me");
+    const resultado = await requisicao("/register", { method: "POST", body: JSON.stringify(dados) });
     formulario.reset();
-    await abrirPainel(sessao.usuario);
+    mostrarTelaAutenticacao("auth-login");
+    mostrarFeedbackAutenticacao(resultado.mensagem);
+  } catch (erro) {
+    mostrarFeedbackAutenticacao(erro.message);
+  }
+});
+
+elemento("mostrar-recuperacao").addEventListener("click", () => {
+  mostrarTelaAutenticacao("auth-recovery");
+});
+elemento("voltar-login-recuperacao").addEventListener("click", mostrarAutenticacao);
+
+elemento("form-reenviar-confirmacao").addEventListener("submit", async evento => {
+  evento.preventDefault();
+  const formulario = evento.currentTarget;
+  try {
+    const resultado = await requisicao("/resend-verification", {
+      method: "POST",
+      body: JSON.stringify(Object.fromEntries(new FormData(formulario).entries())),
+    });
+    mostrarFeedbackAutenticacao(resultado.mensagem);
+    formulario.reset();
+  } catch (erro) {
+    mostrarFeedbackAutenticacao(erro.message);
+  }
+});
+
+elemento("form-recuperacao").addEventListener("submit", async evento => {
+  evento.preventDefault();
+  const formulario = evento.currentTarget;
+  try {
+    const resultado = await requisicao("/password-reset-request", {
+      method: "POST",
+      body: JSON.stringify(Object.fromEntries(new FormData(formulario).entries())),
+    });
+    formulario.reset();
+    mostrarTelaAutenticacao("auth-login");
+    mostrarFeedbackAutenticacao(resultado.mensagem);
+  } catch (erro) {
+    mostrarFeedbackAutenticacao(erro.message);
+  }
+});
+
+elemento("form-redefinir").addEventListener("submit", async evento => {
+  evento.preventDefault();
+  const formulario = evento.currentTarget;
+  const token = new URLSearchParams(window.location.search).get("token") || "";
+  try {
+    const resultado = await requisicao("/password-reset", {
+      method: "POST",
+      body: JSON.stringify({
+        token,
+        senha: new FormData(formulario).get("senha"),
+      }),
+    });
+    formulario.reset();
+    window.history.replaceState({}, "", "/");
+    mostrarTelaAutenticacao("auth-login");
+    mostrarFeedbackAutenticacao(resultado.mensagem);
   } catch (erro) {
     mostrarFeedbackAutenticacao(erro.message);
   }
@@ -290,6 +347,21 @@ elemento("modal-extrato").addEventListener("click", evento => {
 async function iniciarAplicacao() {
   try {
     await atualizarTokenCsrf();
+    const parametros = new URLSearchParams(window.location.search);
+    const tokenConfirmacao = parametros.get("token");
+    if (window.location.pathname === "/confirmar-email" && tokenConfirmacao) {
+      const resultado = await requisicao("/verify-email", {
+        method: "POST", body: JSON.stringify({ token: tokenConfirmacao }),
+      });
+      window.history.replaceState({}, "", "/");
+      mostrarAutenticacao();
+      mostrarFeedbackAutenticacao(resultado.mensagem);
+      return;
+    }
+    if (window.location.pathname === "/redefinir-senha" && tokenConfirmacao) {
+      mostrarTelaAutenticacao("auth-reset");
+      return;
+    }
     const sessao = await requisicao("/me");
     await abrirPainel(sessao.usuario);
   } catch (erro) {
