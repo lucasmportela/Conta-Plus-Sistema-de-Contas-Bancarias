@@ -9,6 +9,7 @@ Aplicação web demonstrativa para gerenciamento individual de contas bancárias
 - Cadastro de usuários com e-mail único, confirmação obrigatória e senha armazenada por hash scrypt.
 - Login, logout e sessões autenticadas com expiração e revogação após redefinição de senha.
 - Recuperação de senha por token aleatório, armazenado como hash, com validade de 30 minutos e uso único.
+- Exclusão da própria conta com reautenticação, confirmação explícita e remoção transacional de contas, históricos e tokens associados.
 - Reenvio de confirmação e respostas genéricas para reduzir enumeração de contas.
 - Envio de mensagens transacionais por SMTP com TLS/SSL configurável.
 - Isolamento de contas e movimentações por usuário autenticado.
@@ -231,6 +232,7 @@ O `.env.example` contém um modelo de configuração. O `ProxyFix` só é ativad
 | POST | `/api/password-reset` | Público + CSRF | Redefine senha com token temporário de uso único |
 | POST | `/api/logout` | Autenticado + CSRF | Encerra a sessão |
 | GET | `/api/me` | Autenticado | Retorna o usuário da sessão |
+| DELETE | `/api/account` | Autenticado + CSRF + senha atual | Exclui a própria conta, contas e históricos associados após confirmação `EXCLUIR` |
 | GET | `/api/resumo` | Autenticado | Retorna indicadores das contas do usuário |
 | GET | `/api/contas` | Autenticado | Lista somente as próprias contas |
 | POST | `/api/contas` | Autenticado + CSRF | Cria conta vinculada ao usuário |
@@ -272,12 +274,12 @@ As rotas protegidas exigem sessão autenticada. Requisições POST, PUT, PATCH e
 
 A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integração criam bancos SQLite temporários, isolados dos dados locais da aplicação.
 
-**Total: 50 testes automatizados — 8 testes unitários das regras de negócio, 26 testes de integração das rotas Flask, 9 testes da camada SQLite, 3 testes do backend de limitação com Redis e 4 testes do serviço de e-mail SMTP.**
+**Total: 55 testes automatizados — 8 testes unitários das regras de negócio, 31 testes de integração das rotas Flask, 9 testes da camada SQLite, 3 testes do backend de limitação com Redis e 4 testes do serviço de e-mail SMTP.**
 
 **Cobertura:**
 
 - **Testes unitários (`test_conta.py`):** regras de depósito, saque, transferência e validação de valores.
-- **Testes das rotas (`test_api.py`):** cadastro pendente, confirmação e expiração de tokens, reenvio de confirmação, login bloqueado até confirmar e-mail, recuperação e redefinição de senha, uso único de tokens, revogação de sessões, respostas contra enumeração, limitação de tentativas, CSRF, autorização e isolamento de dados.
+- **Testes das rotas (`test_api.py`):** cadastro pendente, confirmação e expiração de tokens, reenvio de confirmação, login bloqueado até confirmar e-mail, recuperação e redefinição de senha, uso único de tokens, revogação de sessões, respostas contra enumeração, limitação de tentativas, CSRF, autorização, isolamento de dados e exclusão segura da própria conta.
 - **Testes do banco (`test_database.py`):** criação de tabelas e índices, persistência, commit, rollback, unicidade, integridade referencial, consultas por proprietário, migração de banco legado e concorrência no bloqueio de login.
 - **Testes do limitador (`test_rate_limit.py`):** configuração do backend Redis, validação da URL, execução atômica dos scripts Lua e remoção dos contadores após autenticação bem-sucedida.
 - **Testes de e-mail (`test_email_service.py`):** envio por STARTTLS e SSL, autenticação SMTP e rejeição de configurações inválidas.
@@ -320,7 +322,7 @@ O Conta+ continua sendo um projeto educacional de portfólio — não é um sist
 - Cadastro, reenvio de confirmação e recuperação usam respostas genéricas para não revelar se um e-mail está cadastrado. Uma falha no SMTP também não altera a resposta pública; o usuário pode solicitar o reenvio da confirmação.
 - SQLite armazena os limites em uma instância; Redis pode compartilhar esses contadores entre instâncias. O banco principal continua SQLite, portanto Redis sozinho não torna o sistema multi-instância.
 - Em produção, a aplicação exige HTTPS, host permitido, quantidade explícita de proxies confiáveis, chave de sessão persistente e SMTP. O `ProxyFix` só confia nos saltos configurados.
-- A política em [`/privacidade`](https://github.com/lucasmportela/Conta-Plus-Sistema-de-Contas-Bancarias/blob/main/templates/privacy.html) é um aviso informativo do projeto, não um parecer jurídico. A instância ainda não oferece autoexclusão de conta.
+- A política em [`/privacidade`](https://github.com/lucasmportela/Conta-Plus-Sistema-de-Contas-Bancarias/blob/main/templates/privacy.html) é um aviso informativo do projeto, não um parecer jurídico. A autoexclusão remove os dados operacionais do banco ativo; cópias de segurança e contadores técnicos temporários seguem seus prazos de retenção.
 - Consulte [SECURITY.md](SECURITY.md) para a revisão técnica e os pré-requisitos restantes. Ainda são necessários testes de implantação controlados, auditoria independente, monitoramento, backups e restauração testados, avaliação dos fornecedores e revisão jurídica antes de qualquer disponibilização pública.
 - Não insira dados pessoais, bancários ou financeiros reais.
 
