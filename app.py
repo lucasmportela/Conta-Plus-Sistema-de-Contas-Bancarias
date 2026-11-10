@@ -110,6 +110,11 @@ rate_limiter = LoginRateLimiter(
 )
 inicializar_banco()
 
+MENSAGEM_CADASTRO = (
+    "Se o endereço puder ser cadastrado, enviaremos um link de confirmação. "
+    "Se não receber, use a opção de reenviar a confirmação."
+)
+
 
 def resposta_erro(mensagem, status=400):
     return jsonify({"erro": mensagem}), status
@@ -310,10 +315,8 @@ def api_registrar():
             )
             usuario_id = cursor.lastrowid
     except sqlite3.IntegrityError:
-        # Não confirma se um endereço já está cadastrado.
-        return jsonify({
-            "mensagem": "Se o endereço puder ser cadastrado, enviaremos um link de confirmação."
-        }), 202
+        # A resposta não revela se o endereço já está cadastrado.
+        return jsonify({"mensagem": MENSAGEM_CADASTRO}), 202
 
     token = criar_token_de_conta(
         "email_verification_tokens", usuario_id,
@@ -322,15 +325,11 @@ def api_registrar():
     try:
         enviar_confirmacao_email(email, token)
     except Exception:
+        # Não diferencia falha de entrega de um e-mail já cadastrado.
+        # O usuário pode solicitar o reenvio pela tela de login.
         app.logger.exception("Falha ao enviar e-mail de confirmação.")
-        return resposta_erro(
-            "Cadastro pendente. Não foi possível enviar o e-mail; solicite um novo link.",
-            503,
-        )
 
-    return jsonify({
-        "mensagem": "Cadastro iniciado. Confira seu e-mail para confirmar o endereço antes de entrar."
-    }), 201
+    return jsonify({"mensagem": MENSAGEM_CADASTRO}), 202
 
 
 @app.post("/api/verify-email")
