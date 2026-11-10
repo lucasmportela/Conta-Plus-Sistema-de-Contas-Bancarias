@@ -4,10 +4,13 @@ __pycache__/
 *.pyo
 .venv/
 venv/
+
 # Segredos locais: mantenha apenas o modelo .env.example versionado
 .env
 .env.*
 !.env.example
+/env
+/env/
 
 # Banco de dados e arquivos locais de runtime
 instance/
