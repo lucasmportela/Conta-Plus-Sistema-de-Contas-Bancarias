@@ -2,6 +2,7 @@
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +32,7 @@ class TestApiIntegration(unittest.TestCase):
         database.DB_PATH = Path(_TEST_DATABASE_DIRECTORY.name) / "conta_plus_test.db"
         with database.conectar() as conn:
             conn.execute("DROP TABLE IF EXISTS transacoes")
+            conn.execute("DROP TABLE IF EXISTS tentativas_login")
             conn.execute("DROP TABLE IF EXISTS contas")
             conn.execute("DROP TABLE IF EXISTS usuarios")
         database.inicializar_banco()
@@ -135,6 +137,76 @@ class TestApiIntegration(unittest.TestCase):
         )
         self.assertEqual(login.status_code, 200)
         self.assertEqual(cliente.get("/api/me").get_json()["usuario"]["nome"], "Marina Souza")
+
+
+    def test_login_bloqueia_apos_cinco_senhas_incorretas(self):
+        dados_errados = {"email": "lucas@example.com", "senha": "senha-incorreta"}
+        for tentativa in range(5):
+            resposta = self.post_json(self.client, "/api/login", dados_errados)
+            if tentativa < 4:
+                self.assertEqual(resposta.status_code, 401)
+            else:
+                self.assertEqual(resposta.status_code, 429)
+                self.assertEqual(resposta.headers.get("Retry-After"), "900")
+
+        login_correto = self.post_json(
+            self.client,
+            "/api/login",
+            {"email": "lucas@example.com", "senha": "SenhaSegura123"},
+        )
+        self.assertEqual(login_correto.status_code, 429)
+
+    def test_bloqueio_expira_e_permite_login(self):
+        instante = 1_700_000_000
+        dados_errados = {"email": "lucas@example.com", "senha": "senha-incorreta"}
+        with patch("app.time.time", return_value=instante):
+            for _ in range(5):
+                self.post_json(self.client, "/api/login", dados_errados)
+
+        with patch("app.time.time", return_value=instante + 901):
+            login = self.post_json(
+                self.client,
+                "/api/login",
+                {"email": "lucas@example.com", "senha": "SenhaSegura123"},
+            )
+        self.assertEqual(login.status_code, 200)
+
+    def test_login_bem_sucedido_reinicia_contador_de_falhas(self):
+        dados_errados = {"email": "lucas@example.com", "senha": "senha-incorreta"}
+        for _ in range(4):
+            self.assertEqual(
+                self.post_json(self.client, "/api/login", dados_errados).status_code,
+                401,
+            )
+
+        login = self.post_json(
+            self.client,
+            "/api/login",
+            {"email": "lucas@example.com", "senha": "SenhaSegura123"},
+        )
+        self.assertEqual(login.status_code, 200)
+
+        for _ in range(4):
+            self.assertEqual(
+                self.post_json(self.client, "/api/login", dados_errados).status_code,
+                401,
+            )
+        bloqueio = self.post_json(self.client, "/api/login", dados_errados)
+        self.assertEqual(bloqueio.status_code, 429)
+
+    def test_tentativas_sao_separadas_por_endereco_ip(self):
+        dados_errados = {"email": "lucas@example.com", "senha": "senha-incorreta"}
+        for _ in range(5):
+            self.post_json(self.client, "/api/login", dados_errados)
+
+        outro_ip = app_module.app.test_client()
+        outro_ip.environ_base["REMOTE_ADDR"] = "203.0.113.10"
+        login = self.post_json(
+            outro_ip,
+            "/api/login",
+            {"email": "lucas@example.com", "senha": "SenhaSegura123"},
+        )
+        self.assertEqual(login.status_code, 200)
 
     def test_cadastro_valida_email_senha_e_email_duplicado(self):
         cliente = app_module.app.test_client()
