@@ -6,12 +6,11 @@ __pycache__/
 venv/
 .env
 
-# Banco de dados local e cache de tokens OAuth criptografado
+# Banco de dados e arquivos locais de runtime
 instance/
 *.db
 *.sqlite
 *.sqlite3
-*.enc
 
 # Editor / sistema
 .vscode/
