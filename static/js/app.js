@@ -8,7 +8,7 @@ const moeda = (valor) => Number(valor || 0).toLocaleString("pt-BR", {
   style: "currency", currency: "BRL",
 });
 
-async function requisicao(url, opcoes = {}) {
+async function requisicao(url, opcoes = {}, permitirRenovacaoCsrf = true) {
   const metodo = (opcoes.method || "GET").toUpperCase();
   const headers = { ...(opcoes.headers || {}) };
   if (opcoes.body && !headers["Content-Type"]) {
@@ -26,8 +26,27 @@ async function requisicao(url, opcoes = {}) {
   });
   const dados = await resposta.json().catch(() => ({}));
   if (!resposta.ok) {
+    // O token pode ter expirado junto com a sessão. A primeira tentativa é
+    // recusada antes de executar a operação; renove o token e tente uma vez.
+    if (
+      resposta.status === 403 &&
+      permitirRenovacaoCsrf &&
+      !["GET", "HEAD", "OPTIONS"].includes(metodo)
+    ) {
+      await atualizarTokenCsrf();
+      return requisicao(url, opcoes, false);
+    }
+
     const erro = new Error(dados.erro || "Não foi possível concluir a solicitação.");
     erro.status = resposta.status;
+    if (resposta.status === 401 && !["/login", "/register"].includes(url)) {
+      try {
+        await atualizarTokenCsrf();
+      } catch (_erroCsrf) {
+        // A próxima tentativa poderá criar uma nova sessão anônima.
+      }
+      mostrarAutenticacao();
+    }
     throw erro;
   }
   return dados;
