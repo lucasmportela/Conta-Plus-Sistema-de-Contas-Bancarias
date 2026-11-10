@@ -194,3 +194,15 @@ footer span { color: #3478ed; padding: 0 5px; }
 .button-secondary { width: 100%; justify-content: center; background: #f3f6fa; color: #536176; border: 1px solid #e4eaf2; }
 .auth-footnote a, footer a { color: var(--blue); text-decoration: none; }
 .auth-footnote a:hover, footer a:hover { text-decoration: underline; }
+
+.privacy-body { min-height: 100vh; background: var(--bg); }
+.privacy-page { width: min(900px, calc(100% - 32px)); margin: 0 auto; padding: 35px 0; }
+.privacy-page .auth-brand { margin: 0 0 22px; }
+.privacy-panel { padding: clamp(22px, 5vw, 48px); }
+.privacy-panel h1 { margin: 0 0 8px; }
+.privacy-panel h2 { margin: 27px 0 10px; }
+.privacy-panel p, .privacy-panel li { color: #536176; font-size: 13px; line-height: 1.75; }
+.privacy-panel ul { padding-left: 22px; }
+.privacy-panel li { margin: 7px 0; }
+.privacy-panel a:not(.button) { color: var(--blue); }
+.privacy-back { display: inline-flex; width: auto; margin-top: 24px; text-decoration: none; }
