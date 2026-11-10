@@ -2,7 +2,17 @@
 
 ## Estado
 
-Este repositório é um projeto educacional. A lista abaixo documenta controles implementados e pré-requisitos ainda necessários; não é uma certificação de segurança nem autorização para uso financeiro real.
+Este repositório é um projeto educacional e **não está liberado para disponibilização pública aberta nem para uso financeiro real**. A revisão abaixo registra controles implementados, evidências de teste e pendências operacionais; não é uma certificação de segurança.
+
+## Resultado da revisão atual
+
+- GitHub Actions: **46 testes automatizados aprovados** na execução mais recente.
+- Os testes de Redis usam um cliente simulado e verificam os scripts Lua e a configuração; ainda falta um teste de integração contra uma instância Redis real.
+- O fluxo SMTP tem testes automatizados para STARTTLS, SSL e rejeição de configurações conflitantes; a entrega real ainda depende de validar o provedor, domínio e reputação do remetente.
+- HTTPS, cookies Secure, HSTS e ProxyFix estão protegidos por validações de configuração em produção, mas ainda precisam ser exercitados no ambiente real do provedor, com a topologia de proxy confirmada.
+- A política de privacidade é um aviso informativo. A página também carrega Google Fonts, serviço externo que deve ser considerado na avaliação de fornecedores e no aviso de privacidade.
+
+**Conclusão:** os controles de aplicação e os testes automatizados evoluíram, mas não substituem teste de implantação, auditoria independente, operação segura ou revisão jurídica. Mantenha o Conta+ sem serviço público até concluir as pendências abaixo.
 
 ## Controles implementados
 
@@ -25,6 +35,11 @@ Este repositório é um projeto educacional. A lista abaixo documenta controles 
 - Configurar armazenamento persistente, backups criptografados, restauração testada, monitoramento e alertas.
 - Definir processo de exclusão de contas e retenção de dados; a aplicação ainda não oferece autoexclusão.
 - Validar domínio e e-mail do remetente, SPF, DKIM e DMARC.
+- Testar os fluxos de confirmação e recuperação com o provedor SMTP real, incluindo falhas temporárias, rejeições e reenvio.
+- Executar teste de integração com Redis real, além dos testes unitários com cliente simulado.
+- Validar em ambiente de homologação a terminação TLS, o número de proxies confiáveis, os cabeçalhos encaminhados, os hosts permitidos, cookies Secure e HSTS.
+- Documentar a política de retenção e exclusão de dados, inclusive solicitações de titulares, logs e cópias de segurança.
+- Revisar os serviços externos carregados pela interface (incluindo Google Fonts) e decidir se serão mantidos ou hospedados localmente.
 - Fazer revisão independente de autenticação, autorização, sessão, CSRF, XSS, SQL, dependências, configuração de infraestrutura e recuperação de incidentes.
 - Rever a política de privacidade para identificar o operador, fornecedores, contato, bases legais, prazos e direitos aplicáveis à LGPD.
 - Não utilizar dados pessoais ou financeiros reais.
