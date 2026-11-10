@@ -8,7 +8,12 @@ import sys
 import uuid
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT_DIR))
+
+from dotenv import load_dotenv
+
+load_dotenv(ROOT_DIR / ".env")
 
 from email_service import enviar_email
 
