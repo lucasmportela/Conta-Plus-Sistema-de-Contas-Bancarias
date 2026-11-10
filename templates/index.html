@@ -30,6 +30,13 @@
           </label>
           <button class="button button-primary" type="submit">Entrar <span>→</span></button>
         </form>
+        <p class="auth-switch"><button type="button" id="mostrar-recuperacao">Esqueci minha senha</button></p>
+        <form id="form-reenviar-confirmacao" class="auth-form auth-inline-form">
+          <label>Não recebeu a confirmação? Informe seu e-mail
+            <input name="email" type="email" maxlength="254" autocomplete="email" placeholder="voce@exemplo.com" required>
+          </label>
+          <button class="button button-secondary" type="submit">Reenviar confirmação</button>
+        </form>
         <p class="auth-switch">Ainda não tem acesso? <button type="button" id="mostrar-registro">Criar conta</button></p>
       </div>
       <div id="auth-register" class="hidden">
@@ -49,8 +56,25 @@
         </form>
         <p class="auth-switch">Já possui cadastro? <button type="button" id="mostrar-login">Entrar</button></p>
       </div>
+      <div id="auth-recovery" class="hidden">
+        <h1>Recuperar senha</h1>
+        <p class="auth-description">Informe o e-mail cadastrado. Se houver uma conta confirmada, enviaremos um link temporário.</p>
+        <form id="form-recuperacao" class="auth-form">
+          <label>E-mail<input name="email" type="email" maxlength="254" autocomplete="email" required></label>
+          <button class="button button-primary" type="submit">Enviar instruções <span>→</span></button>
+        </form>
+        <p class="auth-switch"><button type="button" id="voltar-login-recuperacao">Voltar ao login</button></p>
+      </div>
+      <div id="auth-reset" class="hidden">
+        <h1>Definir nova senha</h1>
+        <p class="auth-description">Escolha uma nova senha com pelo menos 10 caracteres.</p>
+        <form id="form-redefinir" class="auth-form">
+          <label>Nova senha<input name="senha" type="password" minlength="10" maxlength="128" autocomplete="new-password" required></label>
+          <button class="button button-primary" type="submit">Redefinir senha <span>→</span></button>
+        </form>
+      </div>
       <p class="auth-feedback" id="auth-feedback" role="alert" aria-live="polite"></p>
-      <p class="auth-footnote">Projeto educacional. Não utilize dados bancários ou financeiros reais.</p>
+      <p class="auth-footnote">Projeto educacional. Não utilize dados bancários ou financeiros reais.<br><a href="/privacidade" target="_blank" rel="noopener">Política de Privacidade</a></p>
     </div>
   </section>
 
@@ -150,7 +174,7 @@
           </table>
         </div>
       </section>
-      <footer>Conta+ <span>·</span> Projeto demonstrativo com autenticação e isolamento de dados por usuário.</footer>
+      <footer>Conta+ <span>·</span> Projeto demonstrativo com autenticação e isolamento de dados por usuário. <a href="/privacidade" target="_blank" rel="noopener">Política de Privacidade</a></footer>
     </main>
   </div>
 
