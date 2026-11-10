@@ -74,13 +74,14 @@ class TestApiIntegration(unittest.TestCase):
         email="lucas@example.com",
         senha="SenhaSegura123",
     ):
+        emails_antes = len(self.emails)
         resposta = self.post_json(
             client,
             "/api/register",
             {"nome": nome, "email": email, "senha": senha},
         )
-        if resposta.status_code == 201:
-            token = self.token_do_email()
+        if len(self.emails) > emails_antes:
+            token = self.token_do_email(indice=emails_antes)
             confirmacao = self.post_json(client, "/api/verify-email", {"token": token})
             self.assertEqual(confirmacao.status_code, 200)
             login = self.post_json(
@@ -142,8 +143,8 @@ class TestApiIntegration(unittest.TestCase):
             cliente, nome="Marina Souza", email="marina@example.com",
             senha="OutraSenha123",
         )
-        self.assertEqual(cadastro.status_code, 201)
-        self.assertIn("confirme seu e-mail", cadastro.get_json()["mensagem"].lower())
+        self.assertEqual(cadastro.status_code, 202)
+        self.assertIn("link de confirmação", cadastro.get_json()["mensagem"].lower())
 
         with database.conectar() as conn:
             usuario = conn.execute(
@@ -376,7 +377,7 @@ class TestApiIntegration(unittest.TestCase):
         cadastro = self.registrar(
             cliente, email="duplicado@example.com", senha="SenhaSegura123",
         )
-        self.assertEqual(cadastro.status_code, 201)
+        self.assertEqual(cadastro.status_code, 202)
 
         outro_cliente = app_module.app.test_client()
         duplicado = self.registrar(
@@ -387,6 +388,32 @@ class TestApiIntegration(unittest.TestCase):
             cadastro.get_json()["mensagem"],
             duplicado.get_json()["mensagem"],
         )
+
+    def test_falha_smtp_nao_revela_se_email_ja_esta_cadastrado(self):
+        duplicado = self.post_json(
+            self.client,
+            "/api/register",
+            {"nome": "Outro Nome", "email": "lucas@example.com", "senha": "SenhaSegura456"},
+        )
+        self.assertEqual(duplicado.status_code, 202)
+
+        novo_cliente = app_module.app.test_client()
+        with patch("app.enviar_email", side_effect=RuntimeError("SMTP indisponível")):
+            cadastro = self.post_json(
+                novo_cliente,
+                "/api/register",
+                {"nome": "Marina Souza", "email": "smtp-falhou@example.com", "senha": "SenhaSegura456"},
+            )
+
+        self.assertEqual(cadastro.status_code, duplicado.status_code)
+        self.assertEqual(cadastro.get_json(), duplicado.get_json())
+        with database.conectar() as conn:
+            usuario = conn.execute(
+                "SELECT email_verified FROM usuarios WHERE email = ?",
+                ("smtp-falhou@example.com",),
+            ).fetchone()
+        self.assertIsNotNone(usuario)
+        self.assertEqual(usuario["email_verified"], 0)
 
     def test_requisicoes_mutaveis_exigem_token_csrf(self):
         anonimo = app_module.app.test_client()
