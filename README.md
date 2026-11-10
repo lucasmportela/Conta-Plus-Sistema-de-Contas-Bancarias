@@ -103,6 +103,13 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
 ├── .gitignore
 ├── README.md
 ├── SECURITY.md
+├── .github/
+│   └── workflows/
+│       ├── tests.yml
+│       ├── operational.yml
+│       └── smtp-provider.yml
+├── scripts/
+│   └── smtp_provider_smoke.py
 ├── instance/
 │   └── contas.db             # Criado automaticamente ao iniciar
 ├── templates/
@@ -118,8 +125,11 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
 │   ├── test_api.py
 │   ├── test_database.py
 │   ├── test_rate_limit.py
-│   └── test_email_service.py
+│   ├── test_email_service.py
+│   ├── test_rate_limit_redis_integration.py
+│   └── test_email_service_integration.py
 └── docs/
+    ├── SECURITY_REVIEW.md
     └── screenshots/
         ├── tela-inicial.png
         ├── novo-cadastro.png
