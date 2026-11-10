@@ -86,7 +86,7 @@ class TestEmailFlowsIntegration(unittest.TestCase):
 
     def token_from_message(self, message):
         body = message.get("Text", message.get("text", ""))
-        match = re.search(r"[?&]token=([^&\\s<>]+)", body)
+        match = re.search(r"[?&]token=([^&<> ]+)", body)
         self.assertIsNotNone(
             match,
             msg=(
