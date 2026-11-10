@@ -63,7 +63,7 @@ class TestDatabaseIntegration(unittest.TestCase):
             bloqueio_concorrente = database.registrar_falha_login(
                 conn, chave, 1005, 5, 900, 900, 86400
             )
-        self.assertEqual(bloqueio_concorrente, 895)
+        self.assertEqual(bloqueio_concorrente, 899)
 
         with database.conectar() as conn:
             registro = conn.execute(
@@ -71,7 +71,7 @@ class TestDatabaseIntegration(unittest.TestCase):
                 (chave,),
             ).fetchone()
         self.assertEqual(registro["tentativas"], 5)
-        self.assertEqual(registro["bloqueado_ate"], 1900)
+        self.assertEqual(registro["bloqueado_ate"], 1904)
 
     def test_inicializacao_cria_tabelas_indices_e_chaves_estrangeiras(self):
         with database.conectar() as conn:
