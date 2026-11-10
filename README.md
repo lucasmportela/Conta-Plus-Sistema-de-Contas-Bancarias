@@ -76,6 +76,7 @@ Além da suíte unitária e de integração, o workflow Testes operacionais e de
 
 - Testes de integração contra Redis 7 real, incluindo concorrência, bloqueio, expiração e TTL.
 - Envio SMTP para Mailpit local e confirmação da mensagem recebida; nenhuma mensagem é enviada à Internet nesse teste.
+- Fluxos completos via Mailpit: cadastro e confirmação de e-mail, reenvio com invalidação do link anterior, solicitação de recuperação, redefinição de senha e novo login.
 - Build Docker e smoke test do container com configuração de produção, HTTPS encaminhado, HSTS, cookie Secure e volume SQLite.
 - Auditoria de dependências com pip-audit e análise estática Python com Bandit.
 
@@ -308,7 +309,7 @@ A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integra
 
 **Suíte principal: 71 testes automatizados — 8 testes unitários das regras de negócio, 34 testes de integração das rotas Flask, 9 testes da camada SQLite, 3 testes do backend de limitação com Redis simulado, 12 testes do serviço de e-mail SMTP/Gmail simulado e 5 testes de backup/restauração SQLite.**
 
-**Integração operacional adicional: 4 testes — 3 contra Redis real e 1 contra Mailpit local.** Eles são executados pelo workflow operacional; ao rodar a suíte Python sem serviços configurados, aparecem como ignorados (*skipped*). **Total: 75 testes distintos**, todos aprovados em seus respectivos jobs do CI.
+**Integração operacional adicional: 6 testes — 3 contra Redis real e 3 via Mailpit local (transporte SMTP, confirmação/reenvio de cadastro e recuperação de senha).** Eles são executados pelo workflow operacional; ao rodar a suíte Python sem serviços configurados, aparecem como ignorados (*skipped*). **Total: 77 testes distintos**, todos aprovados em seus respectivos jobs do CI.
 
 Os testes de backup/restauração usam registros sintéticos, verificam a integridade SQLite e garantem que a restauração não sobrescreva arquivos existentes. Eles não configuram backup externo nem comprovam recuperação em produção. Consulte docs/BACKUP_RESTORE.md.
 
