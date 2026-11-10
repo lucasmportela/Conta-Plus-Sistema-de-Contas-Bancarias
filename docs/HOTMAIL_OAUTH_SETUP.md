@@ -85,7 +85,7 @@ O projeto ainda não foi autorizado na conta real nem teve entrega real validada
 
 ## Referências oficiais
 
-- https://support.microsoft.com/pt-br/office/configura%C3%A7%C3%B5es-pop-imap-e-smtp-para-outlook-com
+- https://support.microsoft.com/en-us/outlook/pop-imap-and-smtp-settings-for-outlook-com
 - https://learn.microsoft.com/en-us/exchange/client-developer/legacy-protocols/how-to-authenticate-an-imap-pop-smtp-application-by-using-oauth
 - https://learn.microsoft.com/pt-br/entra/identity-platform/v2-oauth2-device-code
 - https://learn.microsoft.com/en-us/entra/msal/python/getting-started/acquiring-tokens
