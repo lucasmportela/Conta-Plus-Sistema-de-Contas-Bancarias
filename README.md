@@ -1,11 +1,16 @@
 # Conta+ — Sistema de Contas Bancárias
 
-Aplicação web demonstrativa para gerenciamento de contas bancárias, desenvolvida a partir de um exercício de Programação Orientada a Objetos em Python. O projeto permite cadastrar contas, realizar depósitos, saques e transferências, além de consultar o extrato de movimentações.
+Aplicação web demonstrativa para gerenciamento individual de contas bancárias, desenvolvida com Python, Flask e SQLite. O sistema oferece cadastro e login de usuários, isolamento de contas por proprietário, depósitos, saques, transferências e consulta de extratos.
 
 > **Aviso:** este é um projeto educacional para portfólio. Não é um sistema bancário real e não deve ser utilizado para armazenar dinheiro ou dados financeiros verdadeiros.
 
 ## Funcionalidades
 
+- Cadastro de usuários com e-mail único e senha armazenada por hash seguro.
+- Login, logout e sessões autenticadas com expiração.
+- Isolamento de contas e movimentações por usuário autenticado.
+- Autorização no backend para impedir acesso a contas de terceiros.
+- Proteção CSRF nas requisições que alteram dados.
 - Cadastro de contas com titular, número e saldo inicial.
 - Validação de nomes, números de conta e valores.
 - Depósitos com atualização automática do saldo.
@@ -13,8 +18,8 @@ Aplicação web demonstrativa para gerenciamento de contas bancárias, desenvolv
 - Transferências entre contas diferentes.
 - Bloqueio de transferência para a própria conta.
 - Extrato individual com histórico das movimentações.
-- Painel com total de contas, saldo consolidado e quantidade de movimentações.
-- Persistência local dos dados em SQLite.
+- Painel com total de contas, saldo consolidado e quantidade de movimentações do usuário autenticado.
+- Persistência local dos dados em SQLite, com vínculo entre contas e usuários.
 - Interface responsiva para desktop e dispositivos móveis.
 
 ## Demonstração Visual
@@ -48,6 +53,8 @@ As capturas de tela utilizadas neste README estão armazenadas em `docs/screensh
 - Flask
 - SQLite
 - Decimal para cálculos monetários
+- Werkzeug para hash de senhas e validação de credenciais
+- Sessões Flask e proteção CSRF
 
 **Front-end**
 - HTML5
@@ -157,18 +164,27 @@ http://127.0.0.1:5000
 
 O banco SQLite e as tabelas são criados automaticamente na primeira execução.
 
+No ambiente local, uma chave de sessão aleatória é gerada automaticamente a cada inicialização. Para produção, configure uma chave persistente e secreta antes de iniciar o servidor:
+
 ## 🔌 API REST
 
-| Método | Rota | Descrição |
-|---|---|---|
-| GET | `/api/health` | Verifica se a API está ativa |
-| GET | `/api/resumo` | Retorna os indicadores do painel |
-| GET | `/api/contas` | Lista todas as contas |
-| POST | `/api/contas` | Cria uma conta |
-| POST | `/api/contas/<id>/depositos` | Realiza depósito |
-| POST | `/api/contas/<id>/saques` | Realiza saque |
-| POST | `/api/contas/<id>/transferencias` | Realiza transferência |
-| GET | `/api/contas/<id>/extrato` | Consulta o extrato |
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
+| GET | `/api/health` | Público | Verifica se a API está ativa |
+| GET | `/api/csrf` | Público | Obtém token CSRF para a sessão |
+| POST | `/api/register` | Público + CSRF | Cria usuário e inicia sessão |
+| POST | `/api/login` | Público + CSRF | Autentica usuário |
+| POST | `/api/logout` | Autenticado + CSRF | Encerra a sessão |
+| GET | `/api/me` | Autenticado | Retorna o usuário da sessão |
+| GET | `/api/resumo` | Autenticado | Retorna indicadores das contas do usuário |
+| GET | `/api/contas` | Autenticado | Lista somente as próprias contas |
+| POST | `/api/contas` | Autenticado + CSRF | Cria conta vinculada ao usuário |
+| POST | `/api/contas/<id>/depositos` | Proprietário + CSRF | Realiza depósito |
+| POST | `/api/contas/<id>/saques` | Proprietário + CSRF | Realiza saque |
+| POST | `/api/contas/<id>/transferencias` | Mesmo proprietário + CSRF | Transfere entre contas próprias |
+| GET | `/api/contas/<id>/extrato` | Proprietário | Consulta o próprio extrato |
+
+As rotas protegidas exigem sessão autenticada. Requisições POST, PUT, PATCH e DELETE também exigem o cabeçalho `X-CSRF-Token`, obtido em `GET /api/csrf`.
 
 ### Exemplo de criação de conta
 
@@ -201,13 +217,13 @@ O banco SQLite e as tabelas são criados automaticamente na primeira execução.
 
 A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integração criam bancos SQLite temporários, isolados dos dados locais da aplicação.
 
-**Total: 27 testes automatizados — 8 testes unitários das regras de negócio, 12 testes de integração das rotas Flask e 7 testes da camada SQLite.**
+**Total: 32 testes automatizados — 8 testes unitários das regras de negócio, 16 testes de integração das rotas Flask e 8 testes da camada SQLite.**
 
 **Cobertura:**
 
 - **Testes unitários (`test_conta.py`):** regras de depósito, saque, transferência e validação de valores.
-- **Testes das rotas (`test_api.py`):** página inicial, health check, cadastro, duplicidade de conta, depósitos, saques, transferências, extratos, resumo e respostas de erro.
-- **Testes do banco (`test_database.py`):** criação das tabelas, persistência, commit, rollback, unicidade do número da conta e integridade referencial.
+- **Testes das rotas (`test_api.py`):** cadastro, login, logout, hash de senha, CSRF, autenticação obrigatória, isolamento entre usuários, contas, depósitos, saques, transferências, extratos e resumo.
+- **Testes do banco (`test_database.py`):** criação de tabelas e índices, persistência, commit, rollback, unicidade, integridade referencial, consultas por proprietário e migração de banco legado.
 
 Execute toda a suíte a partir da raiz do repositório (a pasta que contém `app.py`, `conta.py` e `tests/`):
 
@@ -236,13 +252,17 @@ Os mesmos testes são executados automaticamente pelo GitHub Actions a cada push
 
 ## Limitações e segurança
 
-Este projeto foi criado para fins de estudo e não deve ser exposto publicamente como um serviço financeiro.
+O Conta+ agora implementa autenticação e autorização com isolamento de dados por usuário, mas continua sendo um projeto educacional de portfólio — não um serviço bancário pronto para produção.
 
-- **Não há autenticação nem autorização de usuários.** Qualquer pessoa que consiga acessar a aplicação pode listar contas, consultar extratos e realizar operações em todas as contas cadastradas.
-- Não existe isolamento de dados por usuário ou titular.
+- Senhas são armazenadas com hash scrypt via Werkzeug; senhas em texto puro não são persistidas.
+- Sessões são renovadas no login, expiram após 30 minutos de inatividade e usam cookies `HttpOnly` e `SameSite=Lax`; em produção, o cookie também recebe `Secure`.
+- Requisições que alteram dados exigem token CSRF.
+- Consultas, extratos, depósitos, saques e transferências verificam o proprietário no backend. Transferências entre contas de usuários diferentes são recusadas.
+- O cadastro público ainda não inclui confirmação de e-mail, recuperação de senha ou limitação de tentativas de login. Antes de abrir a aplicação à Internet, implemente esses controles, monitoração, HTTPS e política de privacidade.
 - Não insira dados pessoais, bancários ou financeiros reais.
-- O modo Debug fica desativado por padrão; o servidor local escuta em `127.0.0.1`.
-- Antes de qualquer uso real seriam necessários autenticação, autorização por conta, proteção CSRF, controles de concorrência, auditoria, gestão segura de dados, HTTPS e implantação com servidor de produção.
+- O modo Debug fica desativado por padrão; em produção, configure `APP_ENV=production` e uma `SECRET_KEY` forte e aleatória por variável de ambiente.
+- Contas existentes em bancos antigos recebem `owner_id = NULL` na migração e ficam invisíveis para todos os usuários. Faça backup antes de atualizar e atribua registros legados a seus proprietários por um procedimento administrativo confiável, se necessário. Não atribua automaticamente esses registros ao primeiro usuário cadastrado.
+- Para uso real, ainda seriam necessários controles adicionais, como limitação de tentativas, auditoria, gestão segura de dados, backups, proteção contra concorrência e revisão de segurança independente.
 
 ## Autor
 
