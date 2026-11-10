@@ -25,8 +25,17 @@ def inicializar_banco():
     with conectar() as conn:
         conn.executescript(
             """
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                email TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                senha_hash TEXT NOT NULL,
+                criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE TABLE IF NOT EXISTS contas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
                 nome TEXT NOT NULL,
                 numero TEXT NOT NULL UNIQUE,
                 saldo TEXT NOT NULL DEFAULT '0.00',
@@ -49,21 +58,45 @@ def inicializar_banco():
             """
         )
 
+        colunas_contas = {
+            coluna["name"]
+            for coluna in conn.execute("PRAGMA table_info(contas)").fetchall()
+        }
+        if "owner_id" not in colunas_contas:
+            # Registros antigos permanecem sem proprietário e não são expostos
+            # a nenhum usuário até uma atribuição administrativa explícita.
+            conn.execute(
+                "ALTER TABLE contas ADD COLUMN owner_id INTEGER REFERENCES usuarios(id)"
+            )
 
-def obter_conta(conn, conta_id):
-    return conn.execute(
-        "SELECT id, nome, numero, saldo, criada_em FROM contas WHERE id = ?",
-        (conta_id,),
-    ).fetchone()
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_contas_owner_id ON contas(owner_id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_transacoes_conta_id ON transacoes(conta_id)"
+        )
 
 
-def listar_contas(conn):
+def obter_conta(conn, conta_id, usuario_id):
     return conn.execute(
         """
         SELECT id, nome, numero, saldo, criada_em
         FROM contas
-        ORDER BY id DESC
+        WHERE id = ? AND owner_id = ?
+        """,
+        (conta_id, usuario_id),
+    ).fetchone()
+
+
+def listar_contas(conn, usuario_id):
+    return conn.execute(
         """
+        SELECT id, nome, numero, saldo, criada_em
+        FROM contas
+        WHERE owner_id = ?
+        ORDER BY id DESC
+        """,
+        (usuario_id,),
     ).fetchall()
 
 
