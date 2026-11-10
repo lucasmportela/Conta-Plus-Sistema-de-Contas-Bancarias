@@ -189,3 +189,8 @@ footer span { color: #3478ed; padding: 0 5px; }
   .topbar { align-items: flex-start; flex-direction: column; }
   .topbar-actions { justify-content: flex-start; }
 }
+
+.auth-inline-form { margin-top: 16px; padding-top: 15px; border-top: 1px solid var(--line); gap: 10px; }
+.button-secondary { width: 100%; justify-content: center; background: #f3f6fa; color: #536176; border: 1px solid #e4eaf2; }
+.auth-footnote a, footer a { color: var(--blue); text-decoration: none; }
+.auth-footnote a:hover, footer a:hover { text-decoration: underline; }
