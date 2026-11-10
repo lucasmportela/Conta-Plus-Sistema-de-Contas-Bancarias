@@ -64,7 +64,7 @@ class TestApiIntegration(unittest.TestCase):
 
     def token_do_email(self, indice=-1):
         corpo = self.emails[indice][2]
-        link = re.search(r"https?://\\S+", corpo).group(0)
+        link = re.search(r"https?://\S+", corpo).group(0)
         return parse_qs(urlparse(link).query)["token"][0]
 
     def registrar(
