@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Sistema demonstrativo de gerenciamento de contas bancárias.">
+  <meta name="description" content="Sistema demonstrativo de gerenciamento de contas bancárias com acesso individual.">
   <title>Conta+ | Gestão bancária</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,7 +11,50 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-  <div class="app-shell">
+  <section class="auth-screen" id="auth-view">
+    <div class="auth-card">
+      <a class="auth-brand" href="/">
+        <span class="brand-mark">C+</span>
+        <span>conta<span class="brand-light">+</span></span>
+      </a>
+      <p class="eyebrow">ACESSO INDIVIDUAL</p>
+      <div id="auth-login">
+        <h1>Bem-vindo de volta</h1>
+        <p class="auth-description">Entre para acessar suas contas e movimentações.</p>
+        <form id="form-login" class="auth-form">
+          <label>E-mail
+            <input name="email" type="email" maxlength="254" autocomplete="email" placeholder="voce@exemplo.com" required>
+          </label>
+          <label>Senha
+            <input name="senha" type="password" maxlength="128" autocomplete="current-password" placeholder="Sua senha" required>
+          </label>
+          <button class="button button-primary" type="submit">Entrar <span>→</span></button>
+        </form>
+        <p class="auth-switch">Ainda não tem acesso? <button type="button" id="mostrar-registro">Criar conta</button></p>
+      </div>
+      <div id="auth-register" class="hidden">
+        <h1>Crie seu acesso</h1>
+        <p class="auth-description">Seu cadastro terá contas e movimentações privadas.</p>
+        <form id="form-registro" class="auth-form">
+          <label>Nome
+            <input name="nome" type="text" minlength="3" maxlength="80" autocomplete="name" placeholder="Seu nome" required>
+          </label>
+          <label>E-mail
+            <input name="email" type="email" maxlength="254" autocomplete="email" placeholder="voce@exemplo.com" required>
+          </label>
+          <label>Senha
+            <input name="senha" type="password" minlength="10" maxlength="128" autocomplete="new-password" placeholder="Mínimo de 10 caracteres" required>
+          </label>
+          <button class="button button-primary" type="submit">Criar acesso <span>→</span></button>
+        </form>
+        <p class="auth-switch">Já possui cadastro? <button type="button" id="mostrar-login">Entrar</button></p>
+      </div>
+      <p class="auth-feedback" id="auth-feedback" role="alert" aria-live="polite"></p>
+      <p class="auth-footnote">Projeto educacional. Não utilize dados bancários ou financeiros reais.</p>
+    </div>
+  </section>
+
+  <div class="app-shell hidden" id="app-shell">
     <aside class="sidebar">
       <a class="brand" href="/">
         <span class="brand-mark">C+</span>
@@ -23,7 +66,7 @@
       <a class="nav-item" href="#operacoes"><span class="nav-icon">⇄</span> Operações</a>
       <div class="sidebar-note">
         <span class="note-dot"></span>
-        <div><strong>Ambiente de demonstração</strong><small>Dados armazenados localmente</small></div>
+        <div><strong>Dados isolados por usuário</strong><small>Acesso protegido por sessão</small></div>
       </div>
       <div class="sidebar-footer">CONTA+ · PORTFÓLIO</div>
     </aside>
@@ -33,26 +76,30 @@
         <div>
           <p class="eyebrow">PAINEL FINANCEIRO</p>
           <h1>Visão geral</h1>
-          <p class="subtitle">Gerencie contas e movimentações em um só lugar.</p>
+          <p class="subtitle">Gerencie suas contas e movimentações em um só lugar.</p>
         </div>
-        <div class="status-pill"><span></span> Sistema operacional</div>
+        <div class="topbar-actions">
+          <div class="status-pill"><span></span> Sessão protegida</div>
+          <span class="user-chip" id="usuario-atual"></span>
+          <button class="button button-logout" id="botao-sair" type="button">Sair</button>
+        </div>
       </header>
 
       <section class="summary-grid" id="visao-geral">
         <article class="summary-card">
           <div class="summary-top"><span>Total de contas</span><span class="summary-icon blue">▤</span></div>
           <strong id="total-contas">0</strong>
-          <small>Contas cadastradas</small>
+          <small>Suas contas cadastradas</small>
         </article>
         <article class="summary-card">
           <div class="summary-top"><span>Saldo consolidado</span><span class="summary-icon green">R$</span></div>
           <strong id="saldo-total">R$ 0,00</strong>
-          <small>Soma dos saldos disponíveis</small>
+          <small>Soma dos seus saldos disponíveis</small>
         </article>
         <article class="summary-card">
           <div class="summary-top"><span>Movimentações</span><span class="summary-icon violet">↗</span></div>
           <strong id="total-movimentacoes">0</strong>
-          <small>Operações registradas</small>
+          <small>Suas operações registradas</small>
         </article>
       </section>
 
@@ -91,7 +138,7 @@
 
       <section class="panel accounts-panel" id="contas">
         <div class="panel-heading accounts-heading">
-          <div><p class="eyebrow">ACOMPANHAMENTO</p><h2>Contas cadastradas</h2></div>
+          <div><p class="eyebrow">ACOMPANHAMENTO</p><h2>Minhas contas</h2></div>
           <span class="count-label" id="count-label">0 contas</span>
         </div>
         <div class="table-wrap">
@@ -103,7 +150,7 @@
           </table>
         </div>
       </section>
-      <footer>Conta+ <span>·</span> Projeto demonstrativo de programação orientada a objetos e API REST.</footer>
+      <footer>Conta+ <span>·</span> Projeto demonstrativo com autenticação e isolamento de dados por usuário.</footer>
     </main>
   </div>
 
