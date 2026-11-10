@@ -136,6 +136,13 @@ async function atualizarPainel() {
     atualizarSelects(contas);
   } catch (erro) {
     if (erro.status === 401) {
+      // Renova a sessão anônima e o token CSRF para permitir novo login
+      // depois que a sessão autenticada expirar.
+      try {
+        await atualizarTokenCsrf();
+      } catch (_erroCsrf) {
+        // A tela de login continua disponível; uma nova tentativa pode renovar o token.
+      }
       mostrarAutenticacao();
     } else {
       notificar(erro.message, true);
