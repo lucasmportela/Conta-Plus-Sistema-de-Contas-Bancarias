@@ -321,6 +321,7 @@ Os testes de backup/restauração usam registros sintéticos, verificam a integr
 - **Testes do banco (`test_database.py`):** criação de tabelas e índices, persistência, commit, rollback, unicidade, integridade referencial, consultas por proprietário, migração de banco legado e concorrência no bloqueio de login.
 - **Testes do limitador (`test_rate_limit.py`):** configuração do backend Redis, validação da URL, execução atômica dos scripts Lua e remoção dos contadores após autenticação bem-sucedida.
 - **Testes de e-mail (`test_email_service.py`):** envio por STARTTLS e SSL, autenticação básica simulada, autenticação Hotmail OAuth2/XOAUTH2, validação de remetente e exigência de STARTTLS.
+- **Testes do cache OAuth (`test_hotmail_oauth.py`):** criptografia, permissões restritas, rejeição de chave incorreta e validação do Client ID.
 
 Execute toda a suíte a partir da raiz do repositório (a pasta que contém `app.py`, `conta.py` e `tests/`):
 
