@@ -12,7 +12,7 @@ A aplicação tem controles relevantes implementados, mas a infraestrutura real 
 
 ## Controles verificados no código
 
-- Hash de senha scrypt via Werkzeug; tokens de confirmação e redefinição persistidos como SHA-256, com validade e uso único.
+- Hash de senha scrypt via Werkzeug; tokens de confirmação e redefinição persistidos como SHA-256, com validade e uso único. O nome da tabela de token é validado por allowlist antes da consulta SQL.
 - Confirmação de e-mail obrigatória, respostas genéricas para reduzir enumeração e revogação de sessões após redefinição de senha.
 - CSRF em métodos mutáveis, autorização por proprietário e exportação/exclusão autenticadas.
 - Cookies HttpOnly, SameSite e Secure em produção; hosts permitidos, ProxyFix com número explícito de saltos, CSP e HSTS quando a requisição é reconhecida como HTTPS.
@@ -50,7 +50,7 @@ A interface deixou de carregar Google Fonts de terceiros, reduzindo uma transfer
 ## Evidência e limites
 
 - Os testes de Mailpit demonstram conexão SMTP e recebimento em servidor local de captura, não entregabilidade na Internet.
-- O workflow SMTP do provedor real só executa quando MAIL_SERVER, MAIL_FROM e SMTP_TEST_RECIPIENT estão cadastrados como secrets no GitHub Actions. Ele envia uma única mensagem ao destinatário explicitamente configurado.
+- O workflow SMTP do provedor real é manual, exige confirmação explícita de envio e só executa quando MAIL_SERVER, MAIL_FROM e SMTP_TEST_RECIPIENT estão cadastrados como secrets no GitHub Actions. Ele envia uma única mensagem ao destinatário explicitamente configurado.
 - O teste de container verifica a configuração de produção em CI, não a infraestrutura de um provedor de hospedagem.
 - pip-audit detecta vulnerabilidades conhecidas nas dependências resolvidas; Bandit é análise estática, não prova ausência de falhas.
 - Nenhum teste deve usar dados bancários reais.

@@ -187,13 +187,28 @@ def enviar_recuperacao_senha(email, token):
 
 
 def criar_token_de_conta(tabela, usuario_id, validade):
+    consultas = {
+        "email_verification_tokens": (
+            "DELETE FROM email_verification_tokens WHERE user_id = ?",
+            "INSERT INTO email_verification_tokens "
+            "(token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+        ),
+        "password_reset_tokens": (
+            "DELETE FROM password_reset_tokens WHERE user_id = ?",
+            "INSERT INTO password_reset_tokens "
+            "(token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+        ),
+    }
+    if tabela not in consultas:
+        raise ValueError("Tabela de token não permitida.")
+
+    excluir_token, inserir_token = consultas[tabela]
     token = criar_token_seguro()
     agora = int(time.time())
     with conectar() as conn:
-        conn.execute(f"DELETE FROM {tabela} WHERE user_id = ?", (usuario_id,))
+        conn.execute(excluir_token, (usuario_id,))
         conn.execute(
-            f"INSERT INTO {tabela} (token_hash, user_id, expires_at, created_at) "
-            "VALUES (?, ?, ?, ?)",
+            inserir_token,
             (hash_token(token), usuario_id, agora + validade, agora),
         )
     return token

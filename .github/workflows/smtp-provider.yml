@@ -2,6 +2,12 @@ name: Teste SMTP do provedor real
 
 on:
   workflow_dispatch:
+    inputs:
+      send_test:
+        description: "Confirmo o envio de uma única mensagem para SMTP_TEST_RECIPIENT."
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -9,9 +15,18 @@ permissions:
 jobs:
   smtp-provider:
     name: Envio de uma mensagem de teste
-    if: ${{ secrets.MAIL_SERVER != '' && secrets.MAIL_FROM != '' && secrets.SMTP_TEST_RECIPIENT != '' }}
+    if: ${{ inputs.send_test == true }}
     runs-on: ubuntu-latest
     steps:
+      - name: Validar secrets necessários
+        env:
+          MAIL_SERVER: ${{ secrets.MAIL_SERVER }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          SMTP_TEST_RECIPIENT: ${{ secrets.SMTP_TEST_RECIPIENT }}
+        run: |
+          test -n "$MAIL_SERVER" || { echo "Configure o secret MAIL_SERVER."; exit 1; }
+          test -n "$MAIL_FROM" || { echo "Configure o secret MAIL_FROM."; exit 1; }
+          test -n "$SMTP_TEST_RECIPIENT" || { echo "Configure SMTP_TEST_RECIPIENT."; exit 1; }
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
