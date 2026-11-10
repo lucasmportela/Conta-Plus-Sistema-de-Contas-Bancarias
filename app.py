@@ -1,8 +1,10 @@
 from decimal import Decimal
 from functools import wraps
 from pathlib import Path
+import hashlib
 import hmac
 import os
+import time
 import secrets
 import sqlite3
 from datetime import timedelta
@@ -11,7 +13,10 @@ from flask import Flask, jsonify, render_template, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from conta import Conta, validar_valor
-from database import conectar, inicializar_banco, obter_conta, listar_contas, salvar_transacao
+from database import (
+    conectar, inicializar_banco, obter_conta, listar_contas, salvar_transacao,
+    obter_bloqueio_login, registrar_falha_login, limpar_tentativas_login,
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 app = Flask(__name__, template_folder="templates", static_folder="static")
@@ -39,8 +44,20 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
     SESSION_REFRESH_EACH_REQUEST=True,
     MAX_CONTENT_LENGTH=1024 * 1024,
+    LOGIN_MAX_ATTEMPTS=int(os.getenv("LOGIN_MAX_ATTEMPTS", "5")),
+    LOGIN_WINDOW_SECONDS=int(os.getenv("LOGIN_WINDOW_SECONDS", "900")),
+    LOGIN_BLOCK_SECONDS=int(os.getenv("LOGIN_BLOCK_SECONDS", "900")),
+    LOGIN_ATTEMPT_RETENTION_SECONDS=int(os.getenv("LOGIN_ATTEMPT_RETENTION_SECONDS", "86400")),
 )
 app.json.ensure_ascii = False
+
+if min(
+    app.config["LOGIN_MAX_ATTEMPTS"],
+    app.config["LOGIN_WINDOW_SECONDS"],
+    app.config["LOGIN_BLOCK_SECONDS"],
+    app.config["LOGIN_ATTEMPT_RETENTION_SECONDS"],
+) < 1:
+    raise RuntimeError("As configurações de limitação de login devem ser maiores que zero.")
 
 inicializar_banco()
 
@@ -140,11 +157,41 @@ def api_registrar():
     }), 201
 
 
+def chave_tentativas_login(email):
+    """Gera uma chave HMAC sem armazenar e-mail ou endereço IP em texto puro."""
+    origem = request.remote_addr or "desconhecido"
+    identificador = f"{origem}\0{email}".encode("utf-8")
+    segredo = app.config["SECRET_KEY"].encode("utf-8")
+    return hmac.new(segredo, identificador, hashlib.sha256).hexdigest()
+
+
+def resposta_bloqueio_login(segundos):
+    resposta, status = resposta_erro(
+        "Muitas tentativas de login. Aguarde antes de tentar novamente.",
+        429,
+    )
+    resposta.headers["Retry-After"] = str(max(1, int(segundos)))
+    return resposta, status
+
+
 @app.post("/api/login")
 def api_login():
     dados = request.get_json(silent=True) or {}
     email = str(dados.get("email", "")).strip().lower()
     senha = str(dados.get("senha", ""))
+
+    chave = chave_tentativas_login(email)
+    agora = int(time.time())
+    with conectar() as conn:
+        bloqueio = obter_bloqueio_login(
+            conn,
+            chave,
+            agora,
+            app.config["LOGIN_WINDOW_SECONDS"],
+            app.config["LOGIN_ATTEMPT_RETENTION_SECONDS"],
+        )
+    if bloqueio:
+        return resposta_bloqueio_login(bloqueio)
 
     with conectar() as conn:
         usuario = conn.execute(
@@ -153,7 +200,22 @@ def api_login():
         ).fetchone()
 
     if usuario is None or not check_password_hash(usuario["senha_hash"], senha):
+        with conectar() as conn:
+            bloqueio = registrar_falha_login(
+                conn,
+                chave,
+                agora,
+                app.config["LOGIN_MAX_ATTEMPTS"],
+                app.config["LOGIN_WINDOW_SECONDS"],
+                app.config["LOGIN_BLOCK_SECONDS"],
+                app.config["LOGIN_ATTEMPT_RETENTION_SECONDS"],
+            )
+        if bloqueio:
+            return resposta_bloqueio_login(bloqueio)
         return resposta_erro("E-mail ou senha incorretos.", 401)
+
+    with conectar() as conn:
+        limpar_tentativas_login(conn, chave)
 
     iniciar_sessao(usuario["id"])
     return jsonify({
