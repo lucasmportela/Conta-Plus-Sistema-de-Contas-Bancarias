@@ -93,6 +93,14 @@ class TestDatabaseIntegration(unittest.TestCase):
         self.assertIn("contas", tabelas)
         self.assertIn("transacoes", tabelas)
         self.assertIn("tentativas_login", tabelas)
+        self.assertIn("email_verification_tokens", tabelas)
+        self.assertIn("password_reset_tokens", tabelas)
+        with database.conectar() as conn:
+            colunas_usuarios = {
+                row["name"] for row in conn.execute("PRAGMA table_info(usuarios)")
+            }
+        self.assertIn("email_verified", colunas_usuarios)
+        self.assertIn("session_version", colunas_usuarios)
         self.assertIn("owner_id", colunas)
         self.assertIn("idx_contas_owner_id", indices)
         with database.conectar() as conn:
