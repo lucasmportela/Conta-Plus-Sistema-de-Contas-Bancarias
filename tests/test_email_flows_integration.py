@@ -86,15 +86,16 @@ class TestEmailFlowsIntegration(unittest.TestCase):
 
     def token_from_message(self, message):
         body = message.get("Text", message.get("text", ""))
-        match = re.search(r"[?&]token=([^&<> ]+)", body)
-        self.assertIsNotNone(
-            match,
-            msg=(
-                "A mensagem não contém um parâmetro token. "
-                f"Corpo recebido: {body[:1500]!r}"
-            ),
+        for line in body.splitlines():
+            if "token=" not in line:
+                continue
+            token = parse_qs(urlparse(line.strip()).query).get("token")
+            if token:
+                return token[0]
+        self.fail(
+            "A mensagem não contém um parâmetro token. "
+            f"Corpo recebido: {body[:1500]!r}"
         )
-        return match.group(1)
 
     def test_cadastro_confirmacao_login_e_recuperacao_com_email_real_no_mailpit(self):
         recipient = f"cadastro-{time.time_ns()}@conta-plus.test"
