@@ -8,23 +8,42 @@ import time
 import secrets
 import sqlite3
 from datetime import timedelta
+from hashlib import sha256
+from urllib.parse import urlencode, urljoin
 
-from flask import Flask, jsonify, render_template, request, session
+from flask import Flask, jsonify, render_template, request, session, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from conta import Conta, validar_valor
 from database import (
     conectar, inicializar_banco, obter_conta, listar_contas, salvar_transacao,
-    obter_bloqueio_login, registrar_falha_login, limpar_tentativas_login,
 )
+from email_service import enviar_email
+from rate_limit import LoginRateLimiter
 
 BASE_DIR = Path(__file__).resolve().parent
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
 SECRET_KEY = os.getenv("SECRET_KEY")
-if APP_ENV == "production" and not SECRET_KEY:
-    raise RuntimeError("Defina SECRET_KEY no ambiente de produção.")
+if APP_ENV == "production" and (not SECRET_KEY or len(SECRET_KEY) < 32):
+    raise RuntimeError("Defina SECRET_KEY forte (mínimo de 32 caracteres) no ambiente de produção.")
+
+TRUSTED_PROXY_HOPS = int(os.getenv("TRUSTED_PROXY_HOPS", "0"))
+TRUSTED_HOSTS = [
+    host.strip() for host in os.getenv("TRUSTED_HOSTS", "").split(",") if host.strip()
+]
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+if APP_ENV == "production":
+    if TRUSTED_PROXY_HOPS < 1:
+        raise RuntimeError("Configure TRUSTED_PROXY_HOPS com a quantidade exata de proxies confiáveis.")
+    if not TRUSTED_HOSTS:
+        raise RuntimeError("Configure TRUSTED_HOSTS com os domínios permitidos.")
+    if not PUBLIC_BASE_URL.startswith("https://"):
+        raise RuntimeError("Configure PUBLIC_BASE_URL com a URL HTTPS pública.")
+    if not os.getenv("MAIL_SERVER") or not os.getenv("MAIL_FROM"):
+        raise RuntimeError("Configure MAIL_SERVER e MAIL_FROM para envio de e-mails.")
 if not SECRET_KEY:
     SECRET_KEY = secrets.token_hex(32)
 
@@ -48,17 +67,36 @@ app.config.update(
     LOGIN_WINDOW_SECONDS=int(os.getenv("LOGIN_WINDOW_SECONDS", "900")),
     LOGIN_BLOCK_SECONDS=int(os.getenv("LOGIN_BLOCK_SECONDS", "900")),
     LOGIN_ATTEMPT_RETENTION_SECONDS=int(os.getenv("LOGIN_ATTEMPT_RETENTION_SECONDS", "86400")),
+    EMAIL_VERIFICATION_TTL=int(os.getenv("EMAIL_VERIFICATION_TTL", "3600")),
+    PASSWORD_RESET_TTL=int(os.getenv("PASSWORD_RESET_TTL", "1800")),
+    TRUSTED_HOSTS=TRUSTED_HOSTS if APP_ENV == "production" else None,
+    PREFERRED_URL_SCHEME="https" if APP_ENV == "production" else "http",
 )
 app.json.ensure_ascii = False
+
+if APP_ENV == "production":
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=TRUSTED_PROXY_HOPS,
+        x_proto=TRUSTED_PROXY_HOPS,
+        x_host=TRUSTED_PROXY_HOPS,
+        x_port=TRUSTED_PROXY_HOPS,
+    )
 
 if min(
     app.config["LOGIN_MAX_ATTEMPTS"],
     app.config["LOGIN_WINDOW_SECONDS"],
     app.config["LOGIN_BLOCK_SECONDS"],
     app.config["LOGIN_ATTEMPT_RETENTION_SECONDS"],
+    app.config["EMAIL_VERIFICATION_TTL"],
+    app.config["PASSWORD_RESET_TTL"],
 ) < 1:
-    raise RuntimeError("As configurações de limitação de login devem ser maiores que zero.")
+    raise RuntimeError("As configurações de segurança devem ser maiores que zero.")
 
+rate_limiter = LoginRateLimiter(
+    backend=os.getenv("LOGIN_RATE_LIMIT_BACKEND", "sqlite").strip().lower(),
+    redis_url=os.getenv("REDIS_URL"),
+)
 inicializar_banco()
 
 
@@ -69,17 +107,107 @@ def resposta_erro(mensagem, status=400):
 def requer_autenticacao(funcao):
     @wraps(funcao)
     def wrapper(*args, **kwargs):
-        if not session.get("usuario_id"):
+        usuario_id = session.get("usuario_id")
+        if not usuario_id:
             return resposta_erro("Autenticação necessária.", 401)
+        with conectar() as conn:
+            usuario = conn.execute(
+                "SELECT session_version FROM usuarios WHERE id = ? AND email_verified = 1",
+                (usuario_id,),
+            ).fetchone()
+        if (
+            usuario is None
+            or usuario["session_version"] != session.get("session_version")
+        ):
+            session.clear()
+            return resposta_erro("Sessão expirada ou revogada. Entre novamente.", 401)
         return funcao(*args, **kwargs)
     return wrapper
 
 
-def iniciar_sessao(usuario_id):
+def iniciar_sessao(usuario_id, session_version):
     session.clear()
     session["usuario_id"] = usuario_id
+    session["session_version"] = session_version
     session["csrf_token"] = secrets.token_urlsafe(32)
     session.permanent = True
+
+
+def hash_token(token):
+    return sha256(token.encode("utf-8")).hexdigest()
+
+
+def criar_token_seguro():
+    return secrets.token_urlsafe(32)
+
+
+def url_publica(endpoint, token):
+    base = PUBLIC_BASE_URL or request.host_url.rstrip("/")
+    caminho = url_for(endpoint, _external=False) + "?" + urlencode({"token": token})
+    return urljoin(base + "/", caminho.lstrip("/"))
+
+
+def enviar_confirmacao_email(email, token):
+    link = url_publica("confirmar_email", token)
+    enviar_email(
+        email,
+        "Confirme seu e-mail — Conta+",
+        "Para ativar seu acesso ao Conta+, abra o link abaixo. "
+        f"Ele expira em {app.config['EMAIL_VERIFICATION_TTL'] // 60} minutos.\n\n{link}\n\n"
+        "Se você não solicitou este cadastro, ignore esta mensagem.",
+    )
+
+
+def enviar_recuperacao_senha(email, token):
+    link = url_publica("redefinir_senha", token)
+    enviar_email(
+        email,
+        "Redefinição de senha — Conta+",
+        "Recebemos uma solicitação para redefinir sua senha. "
+        f"O link expira em {app.config['PASSWORD_RESET_TTL'] // 60} minutos "
+        "e pode ser usado uma única vez.\n\n"
+        f"{link}\n\nSe você não solicitou a alteração, ignore esta mensagem.",
+    )
+
+
+def criar_token_de_conta(tabela, usuario_id, validade):
+    token = criar_token_seguro()
+    agora = int(time.time())
+    with conectar() as conn:
+        conn.execute(f"DELETE FROM {tabela} WHERE user_id = ?", (usuario_id,))
+        conn.execute(
+            f"INSERT INTO {tabela} (token_hash, user_id, expires_at, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (hash_token(token), usuario_id, agora + validade, agora),
+        )
+    return token
+
+
+@app.before_request
+def aplicar_controles_de_transporte():
+    if APP_ENV == "production" and not request.is_secure:
+        return resposta_erro("A conexão HTTPS é obrigatória.", 400)
+    return None
+
+
+@app.after_request
+def adicionar_cabecalhos_de_seguranca(resposta):
+    resposta.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resposta.headers.setdefault("X-Frame-Options", "DENY")
+    resposta.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    resposta.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    resposta.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; "
+        "connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; "
+        "form-action 'self'",
+    )
+    if request.is_secure:
+        resposta.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+    return resposta
 
 
 @app.before_request
@@ -140,22 +268,164 @@ def api_registrar():
     try:
         with conectar() as conn:
             cursor = conn.execute(
-                """
-                INSERT INTO usuarios (nome, email, senha_hash)
-                VALUES (?, ?, ?)
-                """,
+                "INSERT INTO usuarios (nome, email, senha_hash) VALUES (?, ?, ?)",
                 (nome, email, generate_password_hash(senha, method="scrypt")),
             )
             usuario_id = cursor.lastrowid
     except sqlite3.IntegrityError:
-        return resposta_erro("Já existe uma conta de usuário com esse e-mail.", 409)
+        # Não confirma se um endereço já está cadastrado.
+        return jsonify({
+            "mensagem": "Se o endereço puder ser cadastrado, enviaremos um link de confirmação."
+        }), 202
 
-    iniciar_sessao(usuario_id)
+    token = criar_token_de_conta(
+        "email_verification_tokens", usuario_id,
+        app.config["EMAIL_VERIFICATION_TTL"],
+    )
+    try:
+        enviar_confirmacao_email(email, token)
+    except Exception:
+        app.logger.exception("Falha ao enviar e-mail de confirmação.")
+        return resposta_erro(
+            "Cadastro pendente. Não foi possível enviar o e-mail; solicite um novo link.",
+            503,
+        )
+
     return jsonify({
-        "mensagem": "Cadastro realizado com sucesso.",
-        "usuario": {"id": usuario_id, "nome": nome, "email": email},
+        "mensagem": "Cadastro iniciado. Confira seu e-mail para confirmar o endereço antes de entrar."
     }), 201
 
+
+@app.post("/api/verify-email")
+def api_confirmar_email():
+    dados = request.get_json(silent=True) or {}
+    token = str(dados.get("token", ""))
+    if not token or len(token) > 200:
+        return resposta_erro("Link de confirmação inválido ou expirado.", 400)
+
+    agora = int(time.time())
+    with conectar() as conn:
+        registro = conn.execute(
+            """
+            SELECT user_id FROM email_verification_tokens
+            WHERE token_hash = ? AND expires_at > ? AND used_at IS NULL
+            """,
+            (hash_token(token), agora),
+        ).fetchone()
+        if registro is None:
+            return resposta_erro("Link de confirmação inválido ou expirado.", 400)
+        conn.execute(
+            "UPDATE usuarios SET email_verified = 1 WHERE id = ?",
+            (registro["user_id"],),
+        )
+        conn.execute(
+            "UPDATE email_verification_tokens SET used_at = ? WHERE token_hash = ?",
+            (agora, hash_token(token)),
+        )
+        conn.execute(
+            "DELETE FROM email_verification_tokens WHERE user_id = ? AND token_hash != ?",
+            (registro["user_id"], hash_token(token)),
+        )
+    return jsonify({"mensagem": "E-mail confirmado. Agora você pode entrar."})
+
+
+@app.post("/api/resend-verification")
+def api_reenviar_confirmacao():
+    dados = request.get_json(silent=True) or {}
+    email = str(dados.get("email", "")).strip().lower()
+    with conectar() as conn:
+        usuario = conn.execute(
+            "SELECT id, email FROM usuarios WHERE email = ? AND email_verified = 0",
+            (email,),
+        ).fetchone()
+    if usuario:
+        token = criar_token_de_conta(
+            "email_verification_tokens", usuario["id"],
+            app.config["EMAIL_VERIFICATION_TTL"],
+        )
+        try:
+            enviar_confirmacao_email(usuario["email"], token)
+        except Exception:
+            app.logger.exception("Falha ao reenviar confirmação de e-mail.")
+    return jsonify({
+        "mensagem": "Se houver um cadastro pendente para esse endereço, enviaremos um novo link."
+    })
+
+
+@app.post("/api/password-reset-request")
+def api_solicitar_recuperacao():
+    dados = request.get_json(silent=True) or {}
+    email = str(dados.get("email", "")).strip().lower()
+    with conectar() as conn:
+        usuario = conn.execute(
+            "SELECT id, email FROM usuarios WHERE email = ? AND email_verified = 1",
+            (email,),
+        ).fetchone()
+    if usuario:
+        token = criar_token_de_conta(
+            "password_reset_tokens", usuario["id"],
+            app.config["PASSWORD_RESET_TTL"],
+        )
+        try:
+            enviar_recuperacao_senha(usuario["email"], token)
+        except Exception:
+            app.logger.exception("Falha ao enviar recuperação de senha.")
+    return jsonify({
+        "mensagem": "Se existir uma conta confirmada para esse endereço, enviaremos instruções de recuperação."
+    })
+
+
+@app.post("/api/password-reset")
+def api_redefinir_senha():
+    dados = request.get_json(silent=True) or {}
+    token = str(dados.get("token", ""))
+    senha = str(dados.get("senha", ""))
+    if len(senha) < 10 or len(senha) > 128:
+        return resposta_erro("A senha deve ter entre 10 e 128 caracteres.")
+    if not token or len(token) > 200:
+        return resposta_erro("Link de recuperação inválido ou expirado.", 400)
+
+    agora = int(time.time())
+    token_hash = hash_token(token)
+    with conectar() as conn:
+        registro = conn.execute(
+            """
+            SELECT user_id FROM password_reset_tokens
+            WHERE token_hash = ? AND expires_at > ? AND used_at IS NULL
+            """,
+            (token_hash, agora),
+        ).fetchone()
+        if registro is None:
+            return resposta_erro("Link de recuperação inválido ou expirado.", 400)
+        conn.execute(
+            "UPDATE usuarios SET senha_hash = ?, session_version = session_version + 1 "
+            "WHERE id = ? AND email_verified = 1",
+            (generate_password_hash(senha, method="scrypt"), registro["user_id"]),
+        )
+        conn.execute(
+            "UPDATE password_reset_tokens SET used_at = ? WHERE token_hash = ?",
+            (agora, token_hash),
+        )
+        conn.execute(
+            "DELETE FROM password_reset_tokens WHERE user_id = ? AND token_hash != ?",
+            (registro["user_id"], token_hash),
+        )
+    return jsonify({"mensagem": "Senha redefinida. Entre novamente com a nova senha."})
+
+
+@app.get("/confirmar-email")
+def confirmar_email():
+    return render_template("index.html")
+
+
+@app.get("/redefinir-senha")
+def redefinir_senha():
+    return render_template("index.html")
+
+
+@app.get("/privacidade")
+def politica_privacidade():
+    return render_template("privacy.html")
 
 def chave_tentativas_login(email):
     """Gera uma chave HMAC sem armazenar e-mail ou endereço IP em texto puro."""
@@ -182,47 +452,42 @@ def api_login():
 
     chave = chave_tentativas_login(email)
     agora = int(time.time())
-    with conectar() as conn:
-        bloqueio = obter_bloqueio_login(
-            conn,
-            chave,
-            agora,
-            app.config["LOGIN_WINDOW_SECONDS"],
-            app.config["LOGIN_ATTEMPT_RETENTION_SECONDS"],
-        )
+    bloqueio = rate_limiter.blocked_seconds(
+        chave, agora, app.config["LOGIN_WINDOW_SECONDS"],
+        app.config["LOGIN_ATTEMPT_RETENTION_SECONDS"],
+    )
     if bloqueio:
         return resposta_bloqueio_login(bloqueio)
 
     with conectar() as conn:
         usuario = conn.execute(
-            "SELECT id, nome, email, senha_hash FROM usuarios WHERE email = ?",
+            "SELECT id, nome, email, senha_hash, email_verified, session_version "
+            "FROM usuarios WHERE email = ?",
             (email,),
         ).fetchone()
 
     if usuario is None or not check_password_hash(usuario["senha_hash"], senha):
-        with conectar() as conn:
-            bloqueio = registrar_falha_login(
-                conn,
-                chave,
-                agora,
-                app.config["LOGIN_MAX_ATTEMPTS"],
-                app.config["LOGIN_WINDOW_SECONDS"],
-                app.config["LOGIN_BLOCK_SECONDS"],
-                app.config["LOGIN_ATTEMPT_RETENTION_SECONDS"],
-            )
+        bloqueio = rate_limiter.record_failure(
+            chave, agora, app.config["LOGIN_MAX_ATTEMPTS"],
+            app.config["LOGIN_WINDOW_SECONDS"], app.config["LOGIN_BLOCK_SECONDS"],
+            app.config["LOGIN_ATTEMPT_RETENTION_SECONDS"],
+        )
         if bloqueio:
             return resposta_bloqueio_login(bloqueio)
         return resposta_erro("E-mail ou senha incorretos.", 401)
 
-    with conectar() as conn:
-        limpar_tentativas_login(conn, chave)
+    if not usuario["email_verified"]:
+        return resposta_erro(
+            "Confirme seu e-mail antes de entrar. Se necessário, solicite um novo link.",
+            403,
+        )
 
-    iniciar_sessao(usuario["id"])
+    rate_limiter.reset(chave)
+    iniciar_sessao(usuario["id"], usuario["session_version"])
     return jsonify({
         "mensagem": "Login realizado com sucesso.",
         "usuario": {"id": usuario["id"], "nome": usuario["nome"], "email": usuario["email"]},
     })
-
 
 @app.post("/api/logout")
 @requer_autenticacao
