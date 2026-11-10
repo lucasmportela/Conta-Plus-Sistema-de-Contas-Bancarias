@@ -11,6 +11,7 @@ Aplicação web demonstrativa para gerenciamento individual de contas bancárias
 - Isolamento de contas e movimentações por usuário autenticado.
 - Autorização no backend para impedir acesso a contas de terceiros.
 - Proteção CSRF nas requisições que alteram dados.
+- Limitação de tentativas de login: cinco falhas por combinação de e-mail e IP em uma janela de 15 minutos, com bloqueio temporário de 15 minutos.
 - Cadastro de contas com titular, número e saldo inicial.
 - Validação de nomes, números de conta e valores.
 - Depósitos com atualização automática do saldo.
@@ -217,12 +218,12 @@ As rotas protegidas exigem sessão autenticada. Requisições POST, PUT, PATCH e
 
 A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integração criam bancos SQLite temporários, isolados dos dados locais da aplicação.
 
-**Total: 32 testes automatizados — 8 testes unitários das regras de negócio, 16 testes de integração das rotas Flask e 8 testes da camada SQLite.**
+**Total: 36 testes automatizados — 8 testes unitários das regras de negócio, 20 testes de integração das rotas Flask e 8 testes da camada SQLite.**
 
 **Cobertura:**
 
 - **Testes unitários (`test_conta.py`):** regras de depósito, saque, transferência e validação de valores.
-- **Testes das rotas (`test_api.py`):** cadastro, login, logout, hash de senha, CSRF, autenticação obrigatória, isolamento entre usuários, contas, depósitos, saques, transferências, extratos e resumo.
+- **Testes das rotas (`test_api.py`):** cadastro, login, logout, hash de senha, bloqueio após falhas consecutivas, expiração do bloqueio, reinício do contador após login válido, isolamento por IP, CSRF, autenticação obrigatória, isolamento entre usuários, contas e movimentações.
 - **Testes do banco (`test_database.py`):** criação de tabelas e índices, persistência, commit, rollback, unicidade, integridade referencial, consultas por proprietário e migração de banco legado.
 
 Execute toda a suíte a partir da raiz do repositório (a pasta que contém `app.py`, `conta.py` e `tests/`):
@@ -258,11 +259,13 @@ O Conta+ agora implementa autenticação e autorização com isolamento de dados
 - Sessões são renovadas no login, expiram após 30 minutos de inatividade e usam cookies `HttpOnly` e `SameSite=Lax`; em produção, o cookie também recebe `Secure`.
 - Requisições que alteram dados exigem token CSRF.
 - Consultas, extratos, depósitos, saques e transferências verificam o proprietário no backend. Transferências entre contas de usuários diferentes são recusadas.
-- O cadastro público ainda não inclui confirmação de e-mail, recuperação de senha ou limitação de tentativas de login. Antes de abrir a aplicação à Internet, implemente esses controles, monitoração, HTTPS e política de privacidade.
+- O login limita cinco falhas por combinação de e-mail e endereço IP em 15 minutos; ao atingir o limite, bloqueia novas tentativas dessa combinação por 15 minutos e informa o tempo pelo cabeçalho `Retry-After`. Os contadores são armazenados no SQLite com identificadores HMAC, sem gravar e-mails ou IPs em texto puro, e registros antigos são limpos após 24 horas.
+- O limite por combinação de e-mail/IP reduz tentativas automatizadas, mas não substitui proteção distribuída por proxy/WAF nem monitoramento. Em ambientes com múltiplas instâncias, o armazenamento de limites precisa ser compartilhado.
+- O cadastro público ainda não inclui confirmação de e-mail nem recuperação de senha. Antes de abrir a aplicação à Internet, implemente esses controles, monitoração, HTTPS e política de privacidade.
 - Não insira dados pessoais, bancários ou financeiros reais.
 - O modo Debug fica desativado por padrão; em produção, configure `APP_ENV=production` e uma `SECRET_KEY` forte e aleatória por variável de ambiente.
 - Contas existentes em bancos antigos recebem `owner_id = NULL` na migração e ficam invisíveis para todos os usuários. Faça backup antes de atualizar e atribua registros legados a seus proprietários por um procedimento administrativo confiável, se necessário. Não atribua automaticamente esses registros ao primeiro usuário cadastrado.
-- Para uso real, ainda seriam necessários controles adicionais, como limitação de tentativas, auditoria, gestão segura de dados, backups, proteção contra concorrência e revisão de segurança independente.
+- Para uso real, ainda seriam necessários controles adicionais, como proteção contra ataques distribuídos, auditoria, gestão segura de dados, backups, armazenamento persistente, proteção contra concorrência e revisão de segurança independente.
 
 ## Autor
 
