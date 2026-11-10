@@ -96,7 +96,8 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
 │   ├── test_conta.py
 │   ├── test_api.py
 │   ├── test_database.py
-│   └── test_rate_limit.py
+│   ├── test_rate_limit.py
+│   └── test_email_service.py
 └── docs/
     └── screenshots/
         ├── tela-inicial.png
@@ -271,7 +272,7 @@ As rotas protegidas exigem sessão autenticada. Requisições POST, PUT, PATCH e
 
 A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integração criam bancos SQLite temporários, isolados dos dados locais da aplicação.
 
-**Total: 46 testes automatizados — 8 testes unitários das regras de negócio, 26 testes de integração das rotas Flask, 9 testes da camada SQLite e 3 testes do backend de limitação com Redis.**
+**Total: 50 testes automatizados — 8 testes unitários das regras de negócio, 26 testes de integração das rotas Flask, 9 testes da camada SQLite, 3 testes do backend de limitação com Redis e 4 testes do serviço de e-mail SMTP.**
 
 **Cobertura:**
 
@@ -279,6 +280,7 @@ A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integra
 - **Testes das rotas (`test_api.py`):** cadastro pendente, confirmação e expiração de tokens, reenvio de confirmação, login bloqueado até confirmar e-mail, recuperação e redefinição de senha, uso único de tokens, revogação de sessões, respostas contra enumeração, limitação de tentativas, CSRF, autorização e isolamento de dados.
 - **Testes do banco (`test_database.py`):** criação de tabelas e índices, persistência, commit, rollback, unicidade, integridade referencial, consultas por proprietário, migração de banco legado e concorrência no bloqueio de login.
 - **Testes do limitador (`test_rate_limit.py`):** configuração do backend Redis, validação da URL, execução atômica dos scripts Lua e remoção dos contadores após autenticação bem-sucedida.
+- **Testes de e-mail (`test_email_service.py`):** envio por STARTTLS e SSL, autenticação SMTP e rejeição de configurações inválidas.
 
 Execute toda a suíte a partir da raiz do repositório (a pasta que contém `app.py`, `conta.py` e `tests/`):
 
