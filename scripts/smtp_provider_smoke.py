@@ -4,9 +4,16 @@ Execute somente após configurar MAIL_* e SMTP_TEST_RECIPIENT no ambiente.
 O script envia uma única mensagem para o destinatário de teste configurado.
 """
 import os
+import sys
 import uuid
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from email_service import enviar_email
+
+if os.getenv("MAIL_AUTH_MODE", "").strip().lower() != "oauth2":
+    raise SystemExit("Configure MAIL_AUTH_MODE=oauth2 para testar o Hotmail.")
 
 destinatario = os.getenv("SMTP_TEST_RECIPIENT", "").strip()
 if not destinatario:
