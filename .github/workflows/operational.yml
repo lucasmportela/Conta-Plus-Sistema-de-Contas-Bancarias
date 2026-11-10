@@ -101,7 +101,9 @@ jobs:
           headers="$RUNNER_TEMP/conta-plus-headers.txt"
           curl -fsS -D "$headers" -o /dev/null             -H 'Host: localhost' -H 'X-Forwarded-Proto: https'             http://127.0.0.1:10000/api/csrf
           grep -Eiq '^Strict-Transport-Security: max-age=31536000' "$headers"
-          grep -Eiq '^Set-Cookie:.*HttpOnly.*SameSite=Lax.*Secure' "$headers"
+          grep -Eiq '^Set-Cookie:.*HttpOnly' "$headers"
+          grep -Eiq '^Set-Cookie:.*SameSite=Lax' "$headers"
+          grep -Eiq '^Set-Cookie:.*Secure' "$headers"
           test -s "$RUNNER_TEMP/conta-plus-data/conta_plus.db"
           for tentativa in $(seq 1 30); do
             estado=$(docker inspect --format='{{.State.Health.Status}}' conta-plus-ci)
