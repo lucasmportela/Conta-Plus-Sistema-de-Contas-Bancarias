@@ -1,6 +1,6 @@
 # Conta+ — Sistema de Contas Bancárias
 
-Aplicação web demonstrativa para gerenciamento individual de contas bancárias, desenvolvida com Python, Flask e SQLite. O sistema oferece cadastro e login de usuários, isolamento de contas por proprietário, depósitos, saques, transferências e consulta de extratos.
+Aplicação web demonstrativa para gerenciamento individual de contas bancárias, desenvolvida com Python, Flask e SQLite. O sistema oferece cadastro com confirmação de e-mail, login, recuperação de senha, isolamento de contas por proprietário, depósitos, saques, transferências e consulta de extratos.
 
 > **Aviso:** este é um projeto educacional para portfólio. Não é um sistema bancário real e não deve ser utilizado para armazenar dinheiro ou dados financeiros verdadeiros.
 
@@ -11,7 +11,7 @@ Aplicação web demonstrativa para gerenciamento individual de contas bancárias
 - Isolamento de contas e movimentações por usuário autenticado.
 - Autorização no backend para impedir acesso a contas de terceiros.
 - Proteção CSRF nas requisições que alteram dados.
-- Limitação de tentativas de login: cinco falhas por combinação de e-mail e IP em uma janela de 15 minutos, com bloqueio temporário de 15 minutos.
+- Limitação de tentativas no cadastro, login, reenvio de confirmação e recuperação: cinco solicitações por chave em 15 minutos, com bloqueio temporário de 15 minutos.\n- Backend de limite de login SQLite para uma instância ou Redis compartilhado opcional.
 - Cadastro de contas com titular, número e saldo inicial.
 - Validação de nomes, números de conta e valores.
 - Depósitos com atualização automática do saldo.
@@ -55,7 +55,7 @@ As capturas de tela utilizadas neste README estão armazenadas em `docs/screensh
 - SQLite
 - Decimal para cálculos monetários
 - Werkzeug para hash de senhas e validação de credenciais
-- Sessões Flask e proteção CSRF
+- Sessões Flask, proteção CSRF e cabeçalhos HTTP de segurança\n- SMTP para confirmação e recuperação de conta\n- Redis opcional para limites de autenticação compartilhados
 
 **Front-end**
 - HTML5
@@ -155,6 +155,26 @@ python app.py
 
 O modo Debug fica desativado por padrão. Para habilitá-lo durante desenvolvimento local, defina `FLASK_DEBUG=true`. Quando `APP_ENV=production`, o modo Debug permanece desativado.
 
+### Configuração de e-mail no ambiente local
+
+O cadastro só libera o acesso depois da confirmação do endereço. Para testar esse fluxo, configure um servidor SMTP no arquivo de ambiente:
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Linux/macOS:
+
+```bash
+cp .env.example .env
+```
+
+Edite `.env` com os dados reais do seu provedor SMTP. O arquivo é carregado automaticamente pelo projeto e já está no `.gitignore`. Não envie credenciais SMTP ou chaves para o GitHub. Sem SMTP configurado, a aplicação não consegue enviar links de confirmação ou recuperação e o cadastro retorna erro de serviço.
+
+Para testes locais, também é possível usar um servidor SMTP de desenvolvimento, como Mailpit, configurando host, porta e remetente conforme o ambiente local.
+
 ### 5. Abra a aplicação
 
 Acesse no navegador:
@@ -171,7 +191,7 @@ No ambiente local, uma chave de sessão aleatória é gerada automaticamente a c
 
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
-| GET | `/api/health` | Público | Verifica se a API está ativa |
+| GET | `/api/health` | Público | Verifica se a API está ativa |\n| GET | `/privacidade` | Público | Exibe a política de privacidade |\n| GET | `/confirmar-email?token=...` | Público | Página de confirmação de e-mail |\n| GET | `/redefinir-senha?token=...` | Público | Página para definir nova senha |
 | GET | `/api/csrf` | Público | Obtém token CSRF para a sessão |
 | POST | `/api/register` | Público + CSRF | Cria usuário e inicia sessão |
 | POST | `/api/login` | Público + CSRF | Autentica usuário |
@@ -218,12 +238,12 @@ As rotas protegidas exigem sessão autenticada. Requisições POST, PUT, PATCH e
 
 A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integração criam bancos SQLite temporários, isolados dos dados locais da aplicação.
 
-**Total: 37 testes automatizados — 8 testes unitários das regras de negócio, 20 testes de integração das rotas Flask e 9 testes da camada SQLite.**
+**Total: 42 testes automatizados — 8 testes unitários das regras de negócio, 25 testes de integração das rotas Flask e 9 testes da camada SQLite.**
 
 **Cobertura:**
 
 - **Testes unitários (`test_conta.py`):** regras de depósito, saque, transferência e validação de valores.
-- **Testes das rotas (`test_api.py`):** cadastro, login, logout, hash de senha, bloqueio após falhas consecutivas, expiração do bloqueio, reinício do contador após login válido, isolamento por IP, CSRF, autenticação obrigatória, isolamento entre usuários, contas e movimentações.
+- **Testes das rotas (`test_api.py`):** cadastro pendente, confirmação e expiração de tokens, reenvio de confirmação, login bloqueado até confirmar e-mail, recuperação e redefinição de senha, uso único de tokens, revogação de sessões, respostas contra enumeração, limitação de tentativas, CSRF, autorização e isolamento de dados.
 - **Testes do banco (`test_database.py`):** criação de tabelas e índices, persistência, commit, rollback, unicidade, integridade referencial, consultas por proprietário, migração de banco legado e concorrência no bloqueio de login.
 
 Execute toda a suíte a partir da raiz do repositório (a pasta que contém `app.py`, `conta.py` e `tests/`):
@@ -265,7 +285,7 @@ O Conta+ agora implementa autenticação e autorização com isolamento de dados
 - Não insira dados pessoais, bancários ou financeiros reais.
 - O modo Debug fica desativado por padrão; em produção, configure `APP_ENV=production` e uma `SECRET_KEY` forte e aleatória por variável de ambiente.
 - Contas existentes em bancos antigos recebem `owner_id = NULL` na migração e ficam invisíveis para todos os usuários. Faça backup antes de atualizar e atribua registros legados a seus proprietários por um procedimento administrativo confiável, se necessário. Não atribua automaticamente esses registros ao primeiro usuário cadastrado.
-- Para uso real, ainda seriam necessários controles adicionais, como proteção contra ataques distribuídos, auditoria, gestão segura de dados, backups, armazenamento persistente, proteção contra concorrência e revisão de segurança independente.
+- Ainda são necessários testes de implantação controlados, auditoria independente, monitoramento, backups e restauração testados, processo de exclusão de contas, avaliação dos fornecedores de e-mail/hospedagem e revisão jurídica da política antes de qualquer disponibilização pública.
 
 ## Autor
 
