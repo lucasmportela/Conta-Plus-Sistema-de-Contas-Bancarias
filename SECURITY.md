@@ -6,10 +6,10 @@ Este repositório é um projeto educacional e **não está liberado para disponi
 
 ## Resultado da revisão atual
 
-- GitHub Actions: **58 testes automatizados aprovados** na execução mais recente.
+- GitHub Actions: **58 testes da suíte principal e 4 testes operacionais de integração aprovados** na execução mais recente.
 - O workflow operacional executa testes de integração contra Redis 7 real, incluindo concorrência, TTL, bloqueio, expiração e reset.
 - O fluxo SMTP tem testes automatizados para STARTTLS e SSL, além de integração com Mailpit local para comprovar envio e recebimento. A entrega real ainda depende de executar o workflow manual com secrets do provedor, validar o domínio e verificar a reputação do remetente.
-- O smoke test do container valida inicialização com configuração de produção, HSTS, cookie Secure/HttpOnly/SameSite e volume persistente. A topologia real de proxy e a terminação TLS ainda precisam ser verificadas no provedor de hospedagem.
+- O smoke test do container valida inicialização com configuração de produção, HSTS, cookie Secure/HttpOnly/SameSite e escrita no volume montado. A topologia real de proxy e a terminação TLS ainda precisam ser verificadas no provedor de hospedagem.
 - As fontes externas do Google Fonts foram removidas; CSS e fontes usam recursos locais. A política de privacidade continua sendo um aviso informativo e precisa identificar o operador, contato, fornecedores reais, bases legais e prazos de retenção.
 
 **Conclusão:** os controles de aplicação e os testes automatizados evoluíram, mas não substituem teste de implantação, auditoria independente, operação segura ou revisão jurídica. Mantenha o Conta+ sem serviço público até concluir as pendências abaixo.
@@ -50,7 +50,7 @@ A rota `GET /api/account/export` exige sessão autenticada e entrega um arquivo 
 - Definir e testar a retenção de backups e logs após autoexclusão. Os dados operacionais são removidos do banco ativo, mas cópias de segurança podem persistir até o fim do prazo de retenção.
 - Validar domínio e e-mail do remetente, SPF, DKIM e DMARC.
 - Testar os fluxos de confirmação e recuperação com o provedor SMTP real, incluindo falhas temporárias, rejeições e reenvio.
-- Executar teste de integração com Redis real, além dos testes unitários com cliente simulado.
+- Manter os testes de integração com Redis real no workflow operacional para detectar regressões no backend compartilhado.
 - Validar em ambiente de homologação a terminação TLS, o número de proxies confiáveis, os cabeçalhos encaminhados, os hosts permitidos, cookies Secure e HSTS.
 - Documentar a política de retenção e exclusão de dados, inclusive solicitações de titulares, logs e cópias de segurança.
 - CSS e fontes da interface agora são servidos localmente; reavaliar qualquer novo fornecedor externo antes de adicioná-lo.
