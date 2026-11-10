@@ -183,6 +183,11 @@ def registrar_falha_login(
         (chave_hash,),
     ).fetchone()
 
+    # Uma requisição concorrente pode ter ultrapassado a consulta inicial
+    # antes de outra requisição ter atingido o limite. Nunca remova um bloqueio ativo.
+    if registro is not None and registro["bloqueado_ate"] > agora:
+        return registro["bloqueado_ate"] - agora
+
     reiniciar = (
         registro is None
         or agora - registro["inicio_janela"] >= janela_segundos
