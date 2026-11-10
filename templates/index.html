@@ -105,6 +105,7 @@
         <div class="topbar-actions">
           <div class="status-pill"><span></span> Sessão protegida</div>
           <span class="user-chip" id="usuario-atual"></span>
+          <button class="button button-danger button-delete-account" id="botao-excluir-conta" type="button">Excluir conta</button>
           <button class="button button-logout" id="botao-sair" type="button">Sair</button>
         </div>
       </header>
@@ -186,6 +187,40 @@
       <button class="close-button" id="fechar-extrato" aria-label="Fechar">×</button>
     </div>
     <div id="extrato-conteudo"></div>
+  </dialog>
+
+  <dialog id="modal-excluir-conta" class="statement-modal delete-modal" aria-labelledby="titulo-excluir-conta">
+    <div class="modal-header">
+      <div>
+        <p class="eyebrow">AÇÃO IRREVERSÍVEL</p>
+        <h2 id="titulo-excluir-conta">Excluir minha conta</h2>
+        <p class="subtitle">Confirme sua identidade antes de continuar.</p>
+      </div>
+      <button class="close-button" id="fechar-modal-exclusao" type="button" aria-label="Fechar">×</button>
+    </div>
+    <div class="delete-warning" role="note">
+      <strong>O que será excluído</strong>
+      <ul>
+        <li>Seu cadastro e suas credenciais de acesso.</li>
+        <li>Todas as contas de demonstração vinculadas ao usuário.</li>
+        <li>Todo o histórico de movimentações dessas contas.</li>
+        <li>Tokens de confirmação de e-mail e recuperação de senha.</li>
+      </ul>
+      <p>A ação não pode ser desfeita. Referências a essas contas em históricos de terceiros serão removidas ou anonimizadas. Cópias de segurança e contadores técnicos de prevenção a abuso seguem seus prazos de retenção.</p>
+    </div>
+    <form id="form-excluir-conta" class="auth-form delete-form">
+      <label>Senha atual
+        <input name="senha_atual" type="password" maxlength="128" autocomplete="current-password" required>
+      </label>
+      <label>Digite EXCLUIR para confirmar
+        <input name="confirmacao" type="text" maxlength="20" autocomplete="off" spellcheck="false" required>
+      </label>
+      <div class="delete-actions">
+        <button class="button button-logout" id="cancelar-exclusao-conta" type="button">Cancelar</button>
+        <button class="button button-danger" type="submit">Excluir permanentemente</button>
+      </div>
+    </form>
+    <p class="auth-feedback" id="exclusao-feedback" role="alert" aria-live="polite"></p>
   </dialog>
 
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
