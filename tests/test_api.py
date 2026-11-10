@@ -2,6 +2,7 @@
 import re
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -776,7 +777,8 @@ class TestApiIntegration(unittest.TestCase):
         self.assertEqual(cliente_terceiro.get("/api/me").status_code, 200)
 
     def test_exclusao_limita_tentativas_de_senha_atual_incorreta(self):
-        instante = 1_700_000_000
+        # Mantém o relógio da sessão assinada coerente com o relógio simulado.
+        instante = int(time.time())
         dados = {"senha_atual": "SenhaErrada123", "confirmacao": "EXCLUIR"}
         with patch("app.time.time", return_value=instante):
             for tentativa in range(5):
