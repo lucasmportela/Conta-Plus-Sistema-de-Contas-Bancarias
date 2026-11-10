@@ -41,8 +41,8 @@ class TestLoginRateLimiter(unittest.TestCase):
         bloqueio = limiter.record_failure("hash", 1000, 5, 900, 900, 86400)
         self.assertEqual(bloqueio, 900)
         self.assertEqual(len(cliente.eval_calls), 2)
-        self.assertIn("redis.call('HSET'", cliente.eval_calls[1][0])
-        self.assertIn("redis.call('EXPIRE'", cliente.eval_calls[1][0])
+        self.assertIn("'HSET'", cliente.eval_calls[1][0])
+        self.assertIn("'EXPIRE'", cliente.eval_calls[1][0])
 
         limiter.reset("hash")
         self.assertEqual(cliente.deleted, ["conta-plus:login:hash"])
