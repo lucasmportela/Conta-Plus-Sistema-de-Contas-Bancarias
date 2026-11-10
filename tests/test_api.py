@@ -704,6 +704,10 @@ class TestApiIntegration(unittest.TestCase):
             if transacao["tipo"] == "REFERENCIA LEGADA"
         )
         self.assertIsNone(referencia_legada["conta_relacionada_id"])
+        self.assertEqual(
+            referencia_legada["descricao"],
+            "Movimentação relacionada a uma conta externa",
+        )
         self.assertNotIn("senha_hash", dados["usuario"])
         self.assertNotIn("session_version", dados["usuario"])
         self.assertNotIn("tokens", dados)

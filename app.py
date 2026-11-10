@@ -609,7 +609,12 @@ def api_exportar_dados():
                 t.id,
                 t.conta_id,
                 t.tipo,
-                t.descricao,
+                CASE
+                    WHEN t.conta_relacionada_id IS NOT NULL
+                         AND (relacionada.id IS NULL OR relacionada.owner_id != ?)
+                    THEN 'Movimentação relacionada a uma conta externa'
+                    ELSE t.descricao
+                END AS descricao,
                 t.valor,
                 t.saldo_anterior,
                 t.saldo_atual,
@@ -624,7 +629,7 @@ def api_exportar_dados():
             WHERE propria.owner_id = ?
             ORDER BY t.id
             """,
-            (usuario_id, usuario_id),
+            (usuario_id, usuario_id, usuario_id),
         ).fetchall()
 
     exportacao = {
