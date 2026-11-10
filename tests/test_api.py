@@ -179,7 +179,7 @@ class TestApiIntegration(unittest.TestCase):
             cliente, "/api/register",
             {"nome": "Marina Souza", "email": "confirmar@example.com", "senha": "SenhaSegura123"},
         )
-        self.assertEqual(cadastro.status_code, 201)
+        self.assertEqual(cadastro.status_code, 202)
         self.assertEqual(cliente.get("/api/me").status_code, 401)
         login_antes = self.post_json(
             cliente, "/api/login",
@@ -210,7 +210,7 @@ class TestApiIntegration(unittest.TestCase):
                 cliente, "/api/register",
                 {"nome": "Marina Souza", "email": "expirado@example.com", "senha": "SenhaSegura123"},
             )
-        self.assertEqual(cadastro.status_code, 201)
+        self.assertEqual(cadastro.status_code, 202)
         token = self.token_do_email()
         with patch("app.time.time", return_value=instante + 3601):
             resposta = self.post_json(cliente, "/api/verify-email", {"token": token})
@@ -222,7 +222,7 @@ class TestApiIntegration(unittest.TestCase):
             cliente, "/api/register",
             {"nome": "Marina Souza", "email": "reenviar@example.com", "senha": "SenhaSegura123"},
         )
-        self.assertEqual(cadastro.status_code, 201)
+        self.assertEqual(cadastro.status_code, 202)
         token_antigo = self.token_do_email()
         resposta = self.post_json(
             cliente, "/api/resend-verification", {"email": "reenviar@example.com"}
@@ -551,7 +551,7 @@ class TestApiIntegration(unittest.TestCase):
             cliente_b, nome="Marina Souza", email="marina@example.com",
             senha="SenhaSegura456",
         )
-        self.assertEqual(cadastro_b.status_code, 201)
+        self.assertEqual(cadastro_b.status_code, 202)
         conta_b = self.criar_conta(
             cliente_b, nome="Marina Souza", numero="USUARIO-B", saldo_inicial="50.00"
         )
