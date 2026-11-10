@@ -47,6 +47,32 @@ class TestDatabaseIntegration(unittest.TestCase):
             )
             return cursor.lastrowid
 
+
+    def test_falha_concorrente_nao_remove_bloqueio_ativo(self):
+        chave = "tentativa-hash"
+        for tentativa in range(5):
+            with database.conectar() as conn:
+                bloqueio = database.registrar_falha_login(
+                    conn, chave, 1000 + tentativa, 5, 900, 900, 86400
+                )
+        self.assertEqual(bloqueio, 900)
+
+        # Simula uma requisição que passou pela primeira checagem antes
+        # de outra requisição ter registrado a quinta falha.
+        with database.conectar() as conn:
+            bloqueio_concorrente = database.registrar_falha_login(
+                conn, chave, 1005, 5, 900, 900, 86400
+            )
+        self.assertEqual(bloqueio_concorrente, 895)
+
+        with database.conectar() as conn:
+            registro = conn.execute(
+                "SELECT tentativas, bloqueado_ate FROM tentativas_login WHERE chave_hash = ?",
+                (chave,),
+            ).fetchone()
+        self.assertEqual(registro["tentativas"], 5)
+        self.assertEqual(registro["bloqueado_ate"], 1900)
+
     def test_inicializacao_cria_tabelas_indices_e_chaves_estrangeiras(self):
         with database.conectar() as conn:
             tabelas = {
