@@ -6,12 +6,16 @@ Aplicação web demonstrativa para gerenciamento individual de contas bancárias
 
 ## Funcionalidades
 
-- Cadastro de usuários com e-mail único e senha armazenada por hash seguro.
-- Login, logout e sessões autenticadas com expiração.
+- Cadastro de usuários com e-mail único, confirmação obrigatória e senha armazenada por hash scrypt.
+- Login, logout e sessões autenticadas com expiração e revogação após redefinição de senha.
+- Recuperação de senha por token aleatório, armazenado como hash, com validade de 30 minutos e uso único.
+- Reenvio de confirmação e respostas genéricas para reduzir enumeração de contas.
+- Envio de mensagens transacionais por SMTP com TLS/SSL configurável.
 - Isolamento de contas e movimentações por usuário autenticado.
 - Autorização no backend para impedir acesso a contas de terceiros.
 - Proteção CSRF nas requisições que alteram dados.
-- Limitação de tentativas no cadastro, login, reenvio de confirmação e recuperação: cinco solicitações por chave em 15 minutos, com bloqueio temporário de 15 minutos.\n- Backend de limite de login SQLite para uma instância ou Redis compartilhado opcional.
+- Limitação de tentativas no cadastro, login, reenvio de confirmação e recuperação: cinco solicitações por chave em 15 minutos, com bloqueio temporário de 15 minutos.
+- Backend SQLite para uma instância ou Redis compartilhado opcional para os contadores.
 - Cadastro de contas com titular, número e saldo inicial.
 - Validação de nomes, números de conta e valores.
 - Depósitos com atualização automática do saldo.
@@ -55,7 +59,9 @@ As capturas de tela utilizadas neste README estão armazenadas em `docs/screensh
 - SQLite
 - Decimal para cálculos monetários
 - Werkzeug para hash de senhas e validação de credenciais
-- Sessões Flask, proteção CSRF e cabeçalhos HTTP de segurança\n- SMTP para confirmação e recuperação de conta\n- Redis opcional para limites de autenticação compartilhados
+- Sessões Flask, proteção CSRF e cabeçalhos HTTP de segurança
+- SMTP para confirmação e recuperação de conta
+- Redis opcional para limites de autenticação compartilhados
 
 **Front-end**
 - HTML5
@@ -69,13 +75,18 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
 ├── app.py
 ├── conta.py
 ├── database.py
+├── email_service.py
+├── rate_limit.py
 ├── requirements.txt
+├── .env.example
 ├── .gitignore
 ├── README.md
+├── SECURITY.md
 ├── instance/
 │   └── contas.db             # Criado automaticamente ao iniciar
 ├── templates/
-│   └── index.html
+│   ├── index.html
+│   └── privacy.html
 ├── static/
 │   ├── css/
 │   │   └── style.css
@@ -183,18 +194,39 @@ Acesse no navegador:
 http://127.0.0.1:5000
 ```
 
-O banco SQLite e as tabelas são criados automaticamente na primeira execução.
+O banco SQLite e as tabelas são criados automaticamente na primeira execução. A migração adiciona os campos de confirmação de e-mail e versão de sessão; usuários antigos passam a precisar confirmar o endereço antes de entrar.
 
-No ambiente local, uma chave de sessão aleatória é gerada automaticamente a cada inicialização. Para produção, configure uma chave persistente e secreta antes de iniciar o servidor:
+### Configuração de produção
+
+A aplicação recusa iniciar em produção sem uma chave forte, URL pública HTTPS, hosts permitidos, número explícito de proxies confiáveis e configuração SMTP. Configure estas variáveis no ambiente do provedor, nunca no repositório:
+
+- `APP_ENV=production`
+- `SECRET_KEY`: valor aleatório persistente com pelo menos 32 caracteres.
+- `PUBLIC_BASE_URL`: URL HTTPS canônica da aplicação.
+- `TRUSTED_HOSTS`: lista separada por vírgulas dos domínios permitidos; o domínio de `PUBLIC_BASE_URL` deve constar nela.
+- `TRUSTED_PROXY_HOPS`: quantidade exata de proxies confiáveis que acrescentam `X-Forwarded-*`. Não estime esse valor.
+- `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` e `MAIL_USE_TLS` ou `MAIL_USE_SSL`.
+- `LOGIN_RATE_LIMIT_BACKEND=sqlite` para uma instância ou `redis` com `REDIS_URL` para contadores compartilhados.
+
+O `.env.example` contém um modelo de configuração. O `ProxyFix` só é ativado em produção, com os saltos explicitamente definidos. HTTPS é obrigatório, cookies recebem `Secure`, e a aplicação envia HSTS e cabeçalhos de segurança. Consulte [SECURITY.md](SECURITY.md).
+
+**Escalabilidade:** Redis compartilha somente os contadores de autenticação. O banco principal ainda é SQLite e deve permanecer em uma única instância com armazenamento persistente. Para múltiplas instâncias da aplicação, migre também os dados principais para PostgreSQL e revise as transações antes de escalar.
 
 ## 🔌 API REST
 
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
-| GET | `/api/health` | Público | Verifica se a API está ativa |\n| GET | `/privacidade` | Público | Exibe a política de privacidade |\n| GET | `/confirmar-email?token=...` | Público | Página de confirmação de e-mail |\n| GET | `/redefinir-senha?token=...` | Público | Página para definir nova senha |
+| GET | `/api/health` | Público | Verifica se a API está ativa |
+| GET | `/privacidade` | Público | Exibe a política de privacidade |
+| GET | `/confirmar-email?token=...` | Público | Página de confirmação de e-mail |
+| GET | `/redefinir-senha?token=...` | Público | Página para definir nova senha |
 | GET | `/api/csrf` | Público | Obtém token CSRF para a sessão |
-| POST | `/api/register` | Público + CSRF | Cria usuário e inicia sessão |
-| POST | `/api/login` | Público + CSRF | Autentica usuário |
+| POST | `/api/register` | Público + CSRF | Cria cadastro pendente e envia confirmação por e-mail |
+| POST | `/api/verify-email` | Público + CSRF | Confirma token de e-mail de uso único |
+| POST | `/api/resend-verification` | Público + CSRF | Reenvia confirmação sem revelar se o e-mail existe |
+| POST | `/api/login` | Público + CSRF | Autentica somente usuário com e-mail confirmado |
+| POST | `/api/password-reset-request` | Público + CSRF | Solicita recuperação com resposta genérica |
+| POST | `/api/password-reset` | Público + CSRF | Redefine senha com token temporário de uso único |
 | POST | `/api/logout` | Autenticado + CSRF | Encerra a sessão |
 | GET | `/api/me` | Autenticado | Retorna o usuário da sessão |
 | GET | `/api/resumo` | Autenticado | Retorna indicadores das contas do usuário |
@@ -273,19 +305,19 @@ Os mesmos testes são executados automaticamente pelo GitHub Actions a cada push
 
 ## Limitações e segurança
 
-O Conta+ agora implementa autenticação e autorização com isolamento de dados por usuário, mas continua sendo um projeto educacional de portfólio — não um serviço bancário pronto para produção.
+O Conta+ continua sendo um projeto educacional de portfólio — não é um sistema bancário real e não deve armazenar dinheiro ou dados financeiros verdadeiros.
 
 - Senhas são armazenadas com hash scrypt via Werkzeug; senhas em texto puro não são persistidas.
-- Sessões são renovadas no login, expiram após 30 minutos de inatividade e usam cookies `HttpOnly` e `SameSite=Lax`; em produção, o cookie também recebe `Secure`.
-- Requisições que alteram dados exigem token CSRF.
-- Consultas, extratos, depósitos, saques e transferências verificam o proprietário no backend. Transferências entre contas de usuários diferentes são recusadas.
-- O login limita cinco falhas por combinação de e-mail e endereço IP em 15 minutos; ao atingir o limite, bloqueia novas tentativas dessa combinação por 15 minutos e informa o tempo pelo cabeçalho `Retry-After`. Os contadores são armazenados no SQLite com identificadores HMAC, sem gravar e-mails ou IPs em texto puro, e registros antigos são limpos após 24 horas.
-- O limite por combinação de e-mail/IP reduz tentativas automatizadas, mas não substitui proteção distribuída por proxy/WAF nem monitoramento. Em ambientes com múltiplas instâncias, o armazenamento de limites precisa ser compartilhado.
-- O cadastro público ainda não inclui confirmação de e-mail nem recuperação de senha. Antes de abrir a aplicação à Internet, implemente esses controles, monitoração, HTTPS e política de privacidade.
+- O cadastro exige confirmação de e-mail. Tokens aleatórios têm validade de uma hora; somente seus hashes são persistidos.
+- A recuperação de senha usa token de uso único com validade de 30 minutos e revoga sessões anteriores após a troca.
+- Sessões expiram após 30 minutos e usam cookies `HttpOnly`, `SameSite=Lax` e, em produção, `Secure`.
+- Requisições que alteram dados exigem token CSRF; contas, extratos e operações são filtrados pelo proprietário.
+- Cadastro, login, reenvio de confirmação e solicitação de recuperação são limitados por IP e, quando aplicável, e-mail. O padrão é cinco solicitações em 15 minutos, com bloqueio por 15 minutos. Identificadores HMAC evitam gravar e-mails e IPs em texto puro no contador.
+- SQLite armazena os limites em uma instância; Redis pode compartilhar esses contadores entre instâncias. O banco principal continua SQLite, portanto Redis sozinho não torna o sistema multi-instância.
+- Em produção, a aplicação exige HTTPS, host permitido, quantidade explícita de proxies confiáveis, chave de sessão persistente e SMTP. O `ProxyFix` só confia nos saltos configurados.
+- A política em [`/privacidade`](https://github.com/lucasmportela/Conta-Plus-Sistema-de-Contas-Bancarias/blob/main/templates/privacy.html) é um aviso informativo do projeto, não um parecer jurídico. A instância ainda não oferece autoexclusão de conta.
+- Consulte [SECURITY.md](SECURITY.md) para a revisão técnica e os pré-requisitos restantes. Ainda são necessários testes de implantação controlados, auditoria independente, monitoramento, backups e restauração testados, avaliação dos fornecedores e revisão jurídica antes de qualquer disponibilização pública.
 - Não insira dados pessoais, bancários ou financeiros reais.
-- O modo Debug fica desativado por padrão; em produção, configure `APP_ENV=production` e uma `SECRET_KEY` forte e aleatória por variável de ambiente.
-- Contas existentes em bancos antigos recebem `owner_id = NULL` na migração e ficam invisíveis para todos os usuários. Faça backup antes de atualizar e atribua registros legados a seus proprietários por um procedimento administrativo confiável, se necessário. Não atribua automaticamente esses registros ao primeiro usuário cadastrado.
-- Ainda são necessários testes de implantação controlados, auditoria independente, monitoramento, backups e restauração testados, processo de exclusão de contas, avaliação dos fornecedores de e-mail/hospedagem e revisão jurídica da política antes de qualquer disponibilização pública.
 
 ## Autor
 
