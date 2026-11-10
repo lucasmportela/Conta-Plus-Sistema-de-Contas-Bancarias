@@ -11,6 +11,7 @@ instance/
 *.db
 *.sqlite
 *.sqlite3
+*.enc
 
 # Editor / sistema
 .vscode/
