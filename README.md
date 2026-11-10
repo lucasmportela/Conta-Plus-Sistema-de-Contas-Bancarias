@@ -201,6 +201,8 @@ O banco SQLite e as tabelas são criados automaticamente na primeira execução.
 
 A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integração criam bancos SQLite temporários, isolados dos dados locais da aplicação.
 
+**Total: 27 testes automatizados — 8 testes unitários das regras de negócio, 12 testes de integração das rotas Flask e 7 testes da camada SQLite.**
+
 **Cobertura:**
 
 - **Testes unitários (`test_conta.py`):** regras de depósito, saque, transferência e validação de valores.
