@@ -42,6 +42,14 @@ def inicializar_banco():
                 criada_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
 
+            CREATE TABLE IF NOT EXISTS tentativas_login (
+                chave_hash TEXT PRIMARY KEY,
+                tentativas INTEGER NOT NULL,
+                inicio_janela INTEGER NOT NULL,
+                bloqueado_ate INTEGER NOT NULL DEFAULT 0,
+                atualizado_em INTEGER NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS transacoes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 conta_id INTEGER NOT NULL,
@@ -74,6 +82,9 @@ def inicializar_banco():
         )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_transacoes_conta_id ON transacoes(conta_id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tentativas_login_atualizado_em ON tentativas_login(atualizado_em)"
         )
 
 
@@ -115,4 +126,95 @@ def salvar_transacao(
             f"{saldo_anterior:.2f}", f"{saldo_atual:.2f}",
             conta_relacionada_id,
         ),
+    )
+
+
+
+def obter_bloqueio_login(
+    conn, chave_hash, agora, janela_segundos, retencao_segundos
+):
+    """Consulta o bloqueio e remove registros expirados de tentativas."""
+    conn.execute("BEGIN IMMEDIATE")
+    conn.execute(
+        "DELETE FROM tentativas_login WHERE atualizado_em < ?",
+        (agora - retencao_segundos,),
+    )
+    registro = conn.execute(
+        """
+        SELECT inicio_janela, bloqueado_ate
+        FROM tentativas_login
+        WHERE chave_hash = ?
+        """,
+        (chave_hash,),
+    ).fetchone()
+
+    if registro is None:
+        return 0
+
+    bloqueado_ate = registro["bloqueado_ate"]
+    if bloqueado_ate > agora:
+        return bloqueado_ate - agora
+
+    janela_expirada = agora - registro["inicio_janela"] >= janela_segundos
+    if bloqueado_ate or janela_expirada:
+        conn.execute(
+            "DELETE FROM tentativas_login WHERE chave_hash = ?",
+            (chave_hash,),
+        )
+    return 0
+
+
+def registrar_falha_login(
+    conn, chave_hash, agora, limite, janela_segundos,
+    bloqueio_segundos, retencao_segundos
+):
+    """Registra falha de forma atômica e retorna os segundos de bloqueio."""
+    conn.execute("BEGIN IMMEDIATE")
+    conn.execute(
+        "DELETE FROM tentativas_login WHERE atualizado_em < ?",
+        (agora - retencao_segundos,),
+    )
+    registro = conn.execute(
+        """
+        SELECT tentativas, inicio_janela, bloqueado_ate
+        FROM tentativas_login
+        WHERE chave_hash = ?
+        """,
+        (chave_hash,),
+    ).fetchone()
+
+    reiniciar = (
+        registro is None
+        or agora - registro["inicio_janela"] >= janela_segundos
+        or registro["bloqueado_ate"] > 0
+    )
+    if reiniciar:
+        tentativas = 1
+        inicio_janela = agora
+    else:
+        tentativas = registro["tentativas"] + 1
+        inicio_janela = registro["inicio_janela"]
+
+    bloqueado_ate = agora + bloqueio_segundos if tentativas >= limite else 0
+    conn.execute(
+        """
+        INSERT INTO tentativas_login
+            (chave_hash, tentativas, inicio_janela, bloqueado_ate, atualizado_em)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(chave_hash) DO UPDATE SET
+            tentativas = excluded.tentativas,
+            inicio_janela = excluded.inicio_janela,
+            bloqueado_ate = excluded.bloqueado_ate,
+            atualizado_em = excluded.atualizado_em
+        """,
+        (chave_hash, tentativas, inicio_janela, bloqueado_ate, agora),
+    )
+    return max(0, bloqueado_ate - agora)
+
+
+def limpar_tentativas_login(conn, chave_hash):
+    """Remove o contador após autenticação bem-sucedida."""
+    conn.execute(
+        "DELETE FROM tentativas_login WHERE chave_hash = ?",
+        (chave_hash,),
     )
