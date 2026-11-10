@@ -138,6 +138,17 @@ class TestEmailService(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "deve corresponder"):
                 enviar_email("destino@example.test", "Assunto", "Corpo")
 
+    def test_hotmail_nao_aceita_autenticacao_por_senha(self):
+        with self.configuracao(
+            MAIL_AUTH_MODE="password",
+            MAIL_SERVER="smtp-mail.outlook.com",
+            MAIL_USERNAME="conta@hotmail.com",
+            MAIL_PASSWORD="senha-normal",
+            MAIL_FROM="conta@hotmail.com",
+        ):
+            with self.assertRaisesRegex(RuntimeError, "exigem autenticação OAuth2"):
+                enviar_email("destino@example.test", "Assunto", "Corpo")
+
     def test_hotmail_rejeita_smtp_sem_starttls(self):
         with self.configuracao(
             MAIL_AUTH_MODE="oauth2",
