@@ -51,6 +51,10 @@ if APP_ENV == "production":
         raise RuntimeError("O domínio de PUBLIC_BASE_URL também deve constar em TRUSTED_HOSTS.")
     if not os.getenv("MAIL_SERVER") or not os.getenv("MAIL_FROM"):
         raise RuntimeError("Configure MAIL_SERVER e MAIL_FROM para envio de e-mails.")
+    mail_tls = os.getenv("MAIL_USE_TLS", "true").strip().lower() in {"1", "true", "yes", "on"}
+    mail_ssl = os.getenv("MAIL_USE_SSL", "false").strip().lower() in {"1", "true", "yes", "on"}
+    if mail_tls == mail_ssl:
+        raise RuntimeError("Em produção, habilite exatamente uma opção: MAIL_USE_TLS ou MAIL_USE_SSL.")
 if not SECRET_KEY:
     SECRET_KEY = secrets.token_hex(32)
 
