@@ -1,4 +1,5 @@
 """Testes de integração das rotas e dos controles de acesso do Conta+."""
+import re
 import sys
 import tempfile
 import unittest
@@ -32,10 +33,21 @@ class TestApiIntegration(unittest.TestCase):
         database.DB_PATH = Path(_TEST_DATABASE_DIRECTORY.name) / "conta_plus_test.db"
         with database.conectar() as conn:
             conn.execute("DROP TABLE IF EXISTS transacoes")
+            conn.execute("DROP TABLE IF EXISTS email_verification_tokens")
+            conn.execute("DROP TABLE IF EXISTS password_reset_tokens")
             conn.execute("DROP TABLE IF EXISTS tentativas_login")
             conn.execute("DROP TABLE IF EXISTS contas")
             conn.execute("DROP TABLE IF EXISTS usuarios")
         database.inicializar_banco()
+        self.emails = []
+        self.email_patcher = patch(
+            "app.enviar_email",
+            side_effect=lambda destinatario, assunto, corpo: self.emails.append(
+                (destinatario, assunto, corpo)
+            ),
+        )
+        self.email_patcher.start()
+        self.addCleanup(self.email_patcher.stop)
         self.client = app_module.app.test_client()
         self.registrar(self.client)
 
@@ -49,6 +61,13 @@ class TestApiIntegration(unittest.TestCase):
             headers={"X-CSRF-Token": self.token_csrf(client)},
         )
 
+    def token_do_email(self, indice=-1):
+        corpo = self.emails[indice][2]
+        link = re.search(r"https?://\\S+", corpo).group(0)
+        return __import__("urllib.parse", fromlist=["parse_qs", "urlparse"]).parse_qs(
+            __import__("urllib.parse", fromlist=["urlparse"]).urlparse(link).query
+        )["token"][0]
+
     def registrar(
         self,
         client,
@@ -56,11 +75,20 @@ class TestApiIntegration(unittest.TestCase):
         email="lucas@example.com",
         senha="SenhaSegura123",
     ):
-        return self.post_json(
+        resposta = self.post_json(
             client,
             "/api/register",
             {"nome": nome, "email": email, "senha": senha},
         )
+        if resposta.status_code == 201:
+            token = self.token_do_email()
+            confirmacao = self.post_json(client, "/api/verify-email", {"token": token})
+            self.assertEqual(confirmacao.status_code, 200)
+            login = self.post_json(
+                client, "/api/login", {"email": email, "senha": senha}
+            )
+            self.assertEqual(login.status_code, 200)
+        return resposta
 
     def criar_conta(
         self,
@@ -91,6 +119,11 @@ class TestApiIntegration(unittest.TestCase):
         health = self.client.get("/api/health")
         self.assertEqual(health.status_code, 200)
         self.assertEqual(health.get_json()["status"], "ok")
+        politica = self.client.get("/privacidade")
+        self.assertEqual(politica.status_code, 200)
+        self.assertIn("Política de Privacidade", politica.get_data(as_text=True))
+        self.assertIn("Content-Security-Policy", pagina.headers)
+        self.assertEqual(pagina.headers.get("X-Frame-Options"), "DENY")
 
     def test_rotas_de_dados_exigem_autenticacao(self):
         anonimo = app_module.app.test_client()
@@ -111,7 +144,7 @@ class TestApiIntegration(unittest.TestCase):
             senha="OutraSenha123",
         )
         self.assertEqual(cadastro.status_code, 201)
-        self.assertEqual(cadastro.get_json()["usuario"]["email"], "marina@example.com")
+        self.assertIn("confirme seu e-mail", cadastro.get_json()["mensagem"].lower())
 
         with database.conectar() as conn:
             usuario = conn.execute(
@@ -138,6 +171,132 @@ class TestApiIntegration(unittest.TestCase):
         self.assertEqual(login.status_code, 200)
         self.assertEqual(cliente.get("/api/me").get_json()["usuario"]["nome"], "Marina Souza")
 
+
+
+    def test_cadastro_exige_confirmacao_email_e_token_e_de_uso_unico(self):
+        cliente = app_module.app.test_client()
+        cadastro = self.post_json(
+            cliente, "/api/register",
+            {"nome": "Marina Souza", "email": "confirmar@example.com", "senha": "SenhaSegura123"},
+        )
+        self.assertEqual(cadastro.status_code, 201)
+        self.assertEqual(cliente.get("/api/me").status_code, 401)
+        login_antes = self.post_json(
+            cliente, "/api/login",
+            {"email": "confirmar@example.com", "senha": "SenhaSegura123"},
+        )
+        self.assertEqual(login_antes.status_code, 403)
+        token = self.token_do_email()
+        with database.conectar() as conn:
+            registro = conn.execute(
+                "SELECT token_hash FROM email_verification_tokens"
+            ).fetchone()
+        self.assertNotEqual(registro["token_hash"], token)
+        confirmacao = self.post_json(cliente, "/api/verify-email", {"token": token})
+        self.assertEqual(confirmacao.status_code, 200)
+        login_depois = self.post_json(
+            cliente, "/api/login",
+            {"email": "confirmar@example.com", "senha": "SenhaSegura123"},
+        )
+        self.assertEqual(login_depois.status_code, 200)
+        reutilizado = self.post_json(cliente, "/api/verify-email", {"token": token})
+        self.assertEqual(reutilizado.status_code, 400)
+
+    def test_token_de_confirmacao_expirado_e_rejeitado(self):
+        cliente = app_module.app.test_client()
+        instante = 1_700_000_000
+        with patch("app.time.time", return_value=instante):
+            cadastro = self.post_json(
+                cliente, "/api/register",
+                {"nome": "Marina Souza", "email": "expirado@example.com", "senha": "SenhaSegura123"},
+            )
+        self.assertEqual(cadastro.status_code, 201)
+        token = self.token_do_email()
+        with patch("app.time.time", return_value=instante + 3601):
+            resposta = self.post_json(cliente, "/api/verify-email", {"token": token})
+        self.assertEqual(resposta.status_code, 400)
+
+    def test_reenvio_de_confirmacao_invalida_link_anterior_sem_revelar_email(self):
+        cliente = app_module.app.test_client()
+        cadastro = self.post_json(
+            cliente, "/api/register",
+            {"nome": "Marina Souza", "email": "reenviar@example.com", "senha": "SenhaSegura123"},
+        )
+        self.assertEqual(cadastro.status_code, 201)
+        token_antigo = self.token_do_email()
+        resposta = self.post_json(
+            cliente, "/api/resend-verification", {"email": "reenviar@example.com"}
+        )
+        self.assertEqual(resposta.status_code, 200)
+        token_novo = self.token_do_email()
+        self.assertNotEqual(token_antigo, token_novo)
+        antigo = self.post_json(cliente, "/api/verify-email", {"token": token_antigo})
+        self.assertEqual(antigo.status_code, 400)
+        novo = self.post_json(cliente, "/api/verify-email", {"token": token_novo})
+        self.assertEqual(novo.status_code, 200)
+        inexistente = self.post_json(
+            cliente, "/api/resend-verification", {"email": "nao-existe@example.com"}
+        )
+        self.assertEqual(resposta.get_json(), inexistente.get_json())
+
+    def test_recuperacao_de_senha_revoga_sessoes_e_token_so_pode_ser_usado_uma_vez(self):
+        cliente = app_module.app.test_client()
+        self.registrar(
+            cliente, nome="Marina Souza", email="recuperar@example.com",
+            senha="SenhaSegura123",
+        )
+        solicitado = self.post_json(
+            cliente, "/api/password-reset-request", {"email": "recuperar@example.com"}
+        )
+        self.assertEqual(solicitado.status_code, 200)
+        token = self.token_do_email()
+        redefinido = self.post_json(
+            cliente, "/api/password-reset",
+            {"token": token, "senha": "NovaSenhaSegura456"},
+        )
+        self.assertEqual(redefinido.status_code, 200)
+        self.assertEqual(cliente.get("/api/me").status_code, 401)
+        antigo = self.post_json(
+            cliente, "/api/login",
+            {"email": "recuperar@example.com", "senha": "SenhaSegura123"},
+        )
+        self.assertEqual(antigo.status_code, 401)
+        novo = self.post_json(
+            cliente, "/api/login",
+            {"email": "recuperar@example.com", "senha": "NovaSenhaSegura456"},
+        )
+        self.assertEqual(novo.status_code, 200)
+        reutilizado = self.post_json(
+            cliente, "/api/password-reset",
+            {"token": token, "senha": "OutraSenhaSegura789"},
+        )
+        self.assertEqual(reutilizado.status_code, 400)
+
+    def test_token_de_recuperacao_expirado_e_rejeitado_e_resposta_nao_revela_conta(self):
+        cliente = app_module.app.test_client()
+        self.registrar(
+            cliente, nome="Marina Souza", email="reset-expira@example.com",
+            senha="SenhaSegura123",
+        )
+        instante = 1_700_000_000
+        with patch("app.time.time", return_value=instante):
+            solicitado = self.post_json(
+                cliente, "/api/password-reset-request",
+                {"email": "reset-expira@example.com"},
+            )
+        self.assertEqual(solicitado.status_code, 200)
+        token = self.token_do_email()
+        with patch("app.time.time", return_value=instante + 1801):
+            expirado = self.post_json(
+                cliente, "/api/password-reset",
+                {"token": token, "senha": "NovaSenhaSegura456"},
+            )
+        self.assertEqual(expirado.status_code, 400)
+        inexistente = self.post_json(
+            cliente, "/api/password-reset-request",
+            {"email": "nao-existe@example.com"},
+        )
+        self.assertEqual(solicitado.get_json(), inexistente.get_json())
 
     def test_login_bloqueia_apos_cinco_senhas_incorretas(self):
         dados_errados = {"email": "lucas@example.com", "senha": "senha-incorreta"}
@@ -224,7 +383,11 @@ class TestApiIntegration(unittest.TestCase):
         duplicado = self.registrar(
             outro_cliente, email="DUPLICADO@example.com", senha="SenhaSegura456",
         )
-        self.assertEqual(duplicado.status_code, 409)
+        self.assertEqual(duplicado.status_code, 202)
+        self.assertEqual(
+            cadastro.get_json()["mensagem"],
+            duplicado.get_json()["mensagem"],
+        )
 
     def test_requisicoes_mutaveis_exigem_token_csrf(self):
         anonimo = app_module.app.test_client()
