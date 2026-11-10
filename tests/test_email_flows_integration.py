@@ -86,7 +86,7 @@ class TestEmailFlowsIntegration(unittest.TestCase):
 
     def token_from_message(self, message):
         body = message.get("Text", message.get("text", ""))
-        for candidate in re.findall(r"https?://[^\\s<>]+", body):
+        for candidate in re.findall(r"https?://[^\s<>]+", body):
             url = candidate.rstrip(".,;)")
             token = parse_qs(urlparse(url).query).get("token")
             if token:
