@@ -1,6 +1,9 @@
 """Autoriza uma conta pessoal Hotmail por OAuth2 Device Code Flow."""
 
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import msal
 
