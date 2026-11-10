@@ -30,6 +30,7 @@ async function requisicao(url, opcoes = {}, permitirRenovacaoCsrf = true) {
     // recusada antes de executar a operação; renove o token e tente uma vez.
     if (
       resposta.status === 403 &&
+      dados.erro === "Token CSRF ausente ou inválido." &&
       permitirRenovacaoCsrf &&
       !["GET", "HEAD", "OPTIONS"].includes(metodo)
     ) {
@@ -182,6 +183,52 @@ elemento("botao-sair").addEventListener("click", async () => {
     mostrarAutenticacao();
   } catch (erro) {
     notificar(erro.message, true);
+  }
+});
+
+const modalExcluirConta = elemento("modal-excluir-conta");
+const formularioExcluirConta = elemento("form-excluir-conta");
+
+function fecharModalExclusao() {
+  formularioExcluirConta.reset();
+  elemento("exclusao-feedback").textContent = "";
+  modalExcluirConta.close();
+}
+
+elemento("botao-excluir-conta").addEventListener("click", () => {
+  formularioExcluirConta.reset();
+  elemento("exclusao-feedback").textContent = "";
+  modalExcluirConta.showModal();
+  formularioExcluirConta.elements.senha_atual.focus();
+});
+
+elemento("fechar-modal-exclusao").addEventListener("click", fecharModalExclusao);
+elemento("cancelar-exclusao-conta").addEventListener("click", fecharModalExclusao);
+modalExcluirConta.addEventListener("click", evento => {
+  if (evento.target === modalExcluirConta) fecharModalExclusao();
+});
+
+formularioExcluirConta.addEventListener("submit", async evento => {
+  evento.preventDefault();
+  const botao = formularioExcluirConta.querySelector('button[type="submit"]');
+  const dados = Object.fromEntries(new FormData(formularioExcluirConta).entries());
+  botao.disabled = true;
+  elemento("exclusao-feedback").textContent = "";
+
+  try {
+    const resultado = await requisicao("/account", {
+      method: "DELETE",
+      body: JSON.stringify(dados),
+    });
+    fecharModalExclusao();
+    await atualizarTokenCsrf();
+    mostrarAutenticacao();
+    mostrarFeedbackAutenticacao(resultado.mensagem);
+  } catch (erro) {
+    formularioExcluirConta.elements.senha_atual.value = "";
+    elemento("exclusao-feedback").textContent = erro.message;
+  } finally {
+    botao.disabled = false;
   }
 });
 
