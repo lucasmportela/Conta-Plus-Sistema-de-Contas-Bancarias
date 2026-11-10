@@ -206,3 +206,50 @@ footer span { color: #3478ed; padding: 0 5px; }
 .privacy-panel li { margin: 7px 0; }
 .privacy-panel a:not(.button) { color: var(--blue); }
 .privacy-back { display: inline-flex; width: auto; margin-top: 24px; text-decoration: none; }
+
+
+/* Exclusão segura da conta */
+.button-danger {
+  color: #fff;
+  background: #b93846;
+  border: 1px solid #a82f3c;
+  box-shadow: 0 5px 13px rgba(185, 56, 70, .14);
+}
+.button-danger:hover { background: #a82f3c; }
+.button-delete-account { height: 35px; padding: 0 12px; font-size: 11px; }
+.delete-modal { width: min(560px, calc(100% - 28px)); }
+.delete-warning {
+  margin: 0 0 20px;
+  padding: 16px 17px;
+  border: 1px solid #f0d5d8;
+  border-radius: 10px;
+  background: #fff8f8;
+  color: #65434a;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.delete-warning strong { display: block; margin-bottom: 8px; color: #963744; }
+.delete-warning ul { margin: 0 0 10px; padding-left: 19px; }
+.delete-warning p { margin: 0; }
+.delete-form { gap: 13px; }
+.delete-form label { display: grid; gap: 7px; color: #536176; font-size: 12px; font-weight: 600; }
+.delete-form input {
+  width: 100%;
+  height: 43px;
+  border: 1px solid #e4eaf2;
+  border-radius: 9px;
+  padding: 0 12px;
+  color: #293950;
+  background: #fff;
+  outline: none;
+  font-size: 13px;
+}
+.delete-form input:focus { border-color: #7eabf8; box-shadow: 0 0 0 3px #3478ed12; }
+.delete-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 5px; }
+.delete-actions .button { justify-content: center; }
+.delete-modal .auth-feedback { min-height: 0; margin-bottom: 0; }
+@media (max-width: 700px) {
+  .button-delete-account { height: 35px; }
+  .delete-actions { flex-direction: column-reverse; }
+  .delete-actions .button { width: 100%; }
+}
