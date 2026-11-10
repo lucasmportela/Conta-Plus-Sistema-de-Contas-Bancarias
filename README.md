@@ -70,6 +70,23 @@ As capturas de tela utilizadas neste README estão armazenadas em `docs/screensh
 - CSS3
 - JavaScript (Fetch API)
 
+## Testes operacionais e infraestrutura
+
+Além da suíte unitária e de integração, o workflow Testes operacionais e de segurança executa:
+
+- Testes de integração contra Redis 7 real, incluindo concorrência, bloqueio, expiração e TTL.
+- Envio SMTP para Mailpit local e confirmação da mensagem recebida; nenhuma mensagem é enviada à Internet nesse teste.
+- Build Docker e smoke test do container com configuração de produção, HTTPS encaminhado, HSTS, cookie Secure e volume SQLite.
+- Auditoria de dependências com pip-audit e análise estática Python com Bandit.
+
+O workflow Teste SMTP do provedor real é manual e envia uma única mensagem para SMTP_TEST_RECIPIENT. Para habilitá-lo, cadastre no GitHub Actions os secrets MAIL_SERVER, MAIL_FROM, SMTP_TEST_RECIPIENT e, conforme o provedor, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD, MAIL_USE_TLS e MAIL_USE_SSL. Não coloque credenciais no repositório.
+
+### Executar o container localmente
+
+Construa a imagem com docker build -t conta-plus .. Para executar em modo de produção, configure as variáveis obrigatórias de segredo, HTTPS, host, proxy e SMTP, monte um volume persistente em /data e mantenha apenas uma instância enquanto o banco principal for SQLite. O container roda como usuário não-root e usa Gunicorn. Consulte SECURITY.md antes de configurar um ambiente real.
+
+A integração Mailpit valida o transporte e o recebimento local, mas não substitui o teste com o provedor SMTP real. A revisão técnica preliminar está em docs/SECURITY_REVIEW.md; ela não é auditoria independente nem parecer jurídico.
+
 ## Estrutura do projeto
 
 ```text
@@ -79,6 +96,8 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
 ├── database.py
 ├── email_service.py
 ├── rate_limit.py
+├── Dockerfile
+├── .dockerignore
 ├── requirements.txt
 ├── .env.example
 ├── .gitignore

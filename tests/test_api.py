@@ -132,6 +132,14 @@ class TestApiIntegration(unittest.TestCase):
         self.assertIn("Política de Privacidade", politica.get_data(as_text=True))
         self.assertIn("Content-Security-Policy", pagina.headers)
         self.assertEqual(pagina.headers.get("X-Frame-Options"), "DENY")
+        csp = pagina.headers["Content-Security-Policy"]
+        self.assertIn("style-src 'self';", csp)
+        self.assertIn("font-src 'self';", csp)
+        self.assertNotIn("fonts.googleapis.com", csp)
+        self.assertNotIn("fonts.gstatic.com", pagina.get_data(as_text=True))
+        self.assertNotIn("fonts.googleapis.com", pagina.get_data(as_text=True))
+        self.assertNotIn("fonts.gstatic.com", politica.get_data(as_text=True))
+        self.assertNotIn("fonts.googleapis.com", politica.get_data(as_text=True))
 
     def test_rotas_de_dados_exigem_autenticacao(self):
         anonimo = app_module.app.test_client()

@@ -218,8 +218,8 @@ def adicionar_cabecalhos_de_seguranca(resposta):
     resposta.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     resposta.headers.setdefault(
         "Content-Security-Policy",
-        "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; "
-        "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; "
+        "default-src 'self'; script-src 'self'; style-src 'self'; "
+        "font-src 'self'; img-src 'self' data:; "
         "connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; "
         "form-action 'self'",
     )

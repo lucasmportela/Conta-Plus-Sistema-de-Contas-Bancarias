@@ -1,0 +1,134 @@
+name: Testes operacionais e de segurança
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  redis-integration:
+    name: Integração com Redis real
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Instalar dependências
+        run: python -m pip install -r requirements.txt
+      - name: Testar scripts Lua, TTL, bloqueio e concorrência
+        env:
+          REDIS_URL: redis://127.0.0.1:6379/0
+        run: python -m unittest discover -s tests -p "test_rate_limit_redis_integration.py" -v
+
+  smtp-mailpit:
+    name: Integração SMTP com Mailpit
+    runs-on: ubuntu-latest
+    services:
+      mailpit:
+        image: axllent/mailpit:latest
+        ports:
+          - 1025:1025
+          - 8025:8025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Instalar dependências
+        run: python -m pip install -r requirements.txt
+      - name: Aguardar o servidor SMTP local
+        run: |
+          for tentativa in $(seq 1 30); do
+            if (echo > /dev/tcp/127.0.0.1/1025) >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Mailpit não iniciou a tempo."
+          exit 1
+      - name: Enviar mensagem e confirmar recebimento no Mailpit
+        env:
+          MAIL_SERVER: 127.0.0.1
+          MAIL_PORT: "1025"
+          MAIL_USERNAME: ""
+          MAIL_PASSWORD: ""
+          MAIL_FROM: "Conta+ Teste <nao-responda@conta-plus.test>"
+          MAIL_USE_TLS: "false"
+          MAIL_USE_SSL: "false"
+          SMTP_TEST_RECIPIENT: "teste@conta-plus.test"
+          MAILPIT_API_URL: http://127.0.0.1:8025/api/v1/messages
+        run: python -m unittest discover -s tests -p "test_email_service_integration.py" -v
+
+  container-smoke:
+    name: Imagem Docker e configuração HTTPS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir imagem
+        run: docker build --pull -t conta-plus:ci .
+      - name: Executar container com configuração de produção
+        run: |
+          mkdir -p "$RUNNER_TEMP/conta-plus-data"
+          docker run -d --name conta-plus-ci             -p 127.0.0.1:10000:10000             -v "$RUNNER_TEMP/conta-plus-data:/data"             -e APP_ENV=production             -e SECRET_KEY=ci-only-secret-key-0123456789-abcdef             -e PUBLIC_BASE_URL=https://localhost             -e TRUSTED_HOSTS=localhost             -e TRUSTED_PROXY_HOPS=1             -e MAIL_SERVER=127.0.0.1             -e MAIL_PORT=1025             -e MAIL_FROM=nao-responda@localhost             -e MAIL_USE_TLS=true             -e MAIL_USE_SSL=false             conta-plus:ci
+          for tentativa in $(seq 1 30); do
+            if curl -fsS -H 'Host: localhost' -H 'X-Forwarded-Proto: https'               http://127.0.0.1:10000/api/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS -H 'Host: localhost' -H 'X-Forwarded-Proto: https'             http://127.0.0.1:10000/api/health
+          headers="$RUNNER_TEMP/conta-plus-headers.txt"
+          curl -fsS -D "$headers" -o /dev/null             -H 'Host: localhost' -H 'X-Forwarded-Proto: https'             http://127.0.0.1:10000/api/csrf
+          grep -Eiq '^Strict-Transport-Security: max-age=31536000' "$headers"
+          grep -Eiq '^Set-Cookie:.*HttpOnly.*SameSite=Lax.*Secure' "$headers"
+          test -s "$RUNNER_TEMP/conta-plus-data/conta_plus.db"
+          for tentativa in $(seq 1 30); do
+            estado=$(docker inspect --format='{{.State.Health.Status}}' conta-plus-ci)
+            if [ "$estado" = "healthy" ]; then exit 0; fi
+            sleep 2
+          done
+          echo "Container não ficou healthy."
+          exit 1
+      - name: Logs em caso de falha
+        if: failure()
+        run: docker logs conta-plus-ci || true
+      - name: Remover container
+        if: always()
+        run: docker rm -f conta-plus-ci || true
+
+  static-security:
+    name: Auditoria estática e dependências
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar ferramentas e dependências
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pip-audit bandit
+      - name: Verificar vulnerabilidades conhecidas nas dependências
+        run: pip-audit -r requirements.txt
+      - name: Análise estática de segurança Python
+        run: bandit -q -r app.py conta.py database.py email_service.py rate_limit.py
