@@ -12,7 +12,7 @@ Aplicação web demonstrativa para gerenciamento individual de contas bancárias
 - Exportação dos próprios dados em JSON para download, incluindo cadastro, contas e movimentações, sem credenciais ou tokens de segurança.
 - Exclusão da própria conta com reautenticação, confirmação explícita e remoção transacional de contas, históricos e tokens associados.
 - Reenvio de confirmação e respostas genéricas para reduzir enumeração de contas.
-- Envio de mensagens transacionais por SMTP com TLS e autenticação OAuth2/XOAUTH2 para contas pessoais Hotmail.
+- Envio de mensagens transacionais por Gmail SMTP com TLS e senha de app para confirmação de e-mail e recuperação de senha.
 - Isolamento de contas e movimentações por usuário autenticado.
 - Autorização no backend para impedir acesso a contas de terceiros.
 - Proteção CSRF nas requisições que alteram dados.
@@ -62,7 +62,7 @@ As capturas de tela utilizadas neste README estão armazenadas em `docs/screensh
 - Decimal para cálculos monetários
 - Werkzeug para hash de senhas e validação de credenciais
 - Sessões Flask, proteção CSRF e cabeçalhos HTTP de segurança
-- SMTP com OAuth2/Modern Auth para confirmação e recuperação de conta
+- Gmail SMTP com TLS e senha de app para confirmação e recuperação de conta
 - Redis opcional para limites de autenticação compartilhados
 
 **Front-end**
@@ -79,7 +79,7 @@ Além da suíte unitária e de integração, o workflow Testes operacionais e de
 - Build Docker e smoke test do container com configuração de produção, HTTPS encaminhado, HSTS, cookie Secure e volume SQLite.
 - Auditoria de dependências com pip-audit e análise estática Python com Bandit.
 
-Para a conta pessoal Hotmail, o envio real usa OAuth2 (Modern Auth) e SMTP XOAUTH2; não utiliza senha normal da conta nem senha de aplicativo. Siga docs/HOTMAIL_OAUTH_SETUP.md para registrar o aplicativo Microsoft, autorizar a conta e proteger o cache de tokens. O teste de envio real é executado localmente com python scripts/smtp_provider_smoke.py e uma caixa de teste controlada.
+Para o envio real, use uma conta Gmail exclusiva do projeto e gere uma senha de app após habilitar a verificação em duas etapas. Siga [Configurar Gmail SMTP no Conta+](docs/SMTP_PROVIDER_SETUP.md). Não use a senha normal da conta nem envie credenciais ao GitHub. O teste de envio real é executado localmente com `python scripts/smtp_provider_smoke.py` e uma caixa de teste controlada.
 
 ### Executar o container localmente
 
@@ -95,7 +95,6 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
 ├── conta.py
 ├── database.py
 ├── email_service.py
-├── hotmail_oauth.py
 ├── rate_limit.py
 ├── Dockerfile
 ├── .dockerignore
@@ -109,7 +108,6 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
 │       ├── tests.yml
 │       └── operational.yml
 ├── scripts/
-│   ├── setup_hotmail_oauth.py
 │   ├── smtp_provider_smoke.py
 │   └── backup_restore.py
 ├── instance/
@@ -128,11 +126,11 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
 │   ├── test_database.py
 │   ├── test_rate_limit.py
 │   ├── test_email_service.py
-│   ├── test_hotmail_oauth.py
 │   ├── test_rate_limit_redis_integration.py
 │   └── test_email_service_integration.py
 └── docs/
     ├── SECURITY_REVIEW.md
+    ├── SMTP_PROVIDER_SETUP.md
     └── screenshots/
         ├── tela-inicial.png
         ├── novo-cadastro.png
@@ -218,9 +216,9 @@ Linux/macOS:
 cp .env.example .env
 ```
 
-Edite `.env` com os dados da sua conta Hotmail e do aplicativo Microsoft. O arquivo é carregado automaticamente pelo projeto e já está no `.gitignore`. Siga o guia [Configurar Hotmail no Conta+](docs/HOTMAIL_OAUTH_SETUP.md), que explica o registro do aplicativo, a geração da chave Fernet e a autorização OAuth2. Não envie senha, token, cache OAuth ou chaves para o GitHub.
+Edite `.env` com o endereço da conta Gmail exclusiva e a senha de app gerada nas configurações de segurança da Conta Google. O arquivo é carregado automaticamente pelo projeto e já está no `.gitignore`. Siga o guia [Configurar Gmail SMTP no Conta+](docs/SMTP_PROVIDER_SETUP.md). Nunca use sua senha normal do Google nem envie a senha de app ao GitHub.
 
-Para testes locais sem enviar mensagens à Internet, o workflow operacional utiliza Mailpit. O teste Hotmail real é manual, envia apenas uma mensagem para uma caixa de teste autorizada e exige autorização OAuth2 prévia.
+Para testes locais sem enviar mensagens à Internet, o workflow operacional utiliza Mailpit. O teste Gmail real é manual, envia apenas uma mensagem para uma caixa de teste autorizada e exige uma senha de app configurada localmente.
 
 ### 5. Abra a aplicação
 
@@ -308,7 +306,7 @@ As rotas protegidas exigem sessão autenticada. Requisições POST, PUT, PATCH e
 
 A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integração criam bancos SQLite temporários, isolados dos dados locais da aplicação.
 
-**Suíte principal: 71 testes automatizados — 8 testes unitários das regras de negócio, 34 testes de integração das rotas Flask, 9 testes da camada SQLite, 3 testes do backend de limitação com Redis simulado, 8 testes do serviço de e-mail SMTP/OAuth2 simulado, 4 testes do cache OAuth2 criptografado e 5 testes de backup/restauração SQLite.**
+**Suíte principal: 71 testes automatizados — 8 testes unitários das regras de negócio, 34 testes de integração das rotas Flask, 9 testes da camada SQLite, 3 testes do backend de limitação com Redis simulado, 12 testes do serviço de e-mail SMTP/Gmail simulado e 5 testes de backup/restauração SQLite.**
 
 **Integração operacional adicional: 4 testes — 3 contra Redis real e 1 contra Mailpit local.** Eles são executados pelo workflow operacional; ao rodar a suíte Python sem serviços configurados, aparecem como ignorados (*skipped*). **Total: 75 testes distintos**, todos aprovados em seus respectivos jobs do CI.
 
@@ -320,8 +318,7 @@ Os testes de backup/restauração usam registros sintéticos, verificam a integr
 - **Testes das rotas (`test_api.py`):** cadastro pendente, confirmação e expiração de tokens, reenvio de confirmação, login bloqueado até confirmar e-mail, recuperação e redefinição de senha, uso único de tokens, revogação de sessões, respostas contra enumeração, limitação de tentativas, CSRF, autorização, isolamento de dados, exportação JSON dos próprios dados e exclusão segura da própria conta.
 - **Testes do banco (`test_database.py`):** criação de tabelas e índices, persistência, commit, rollback, unicidade, integridade referencial, consultas por proprietário, migração de banco legado e concorrência no bloqueio de login.
 - **Testes do limitador (`test_rate_limit.py`):** configuração do backend Redis, validação da URL, execução atômica dos scripts Lua e remoção dos contadores após autenticação bem-sucedida.
-- **Testes de e-mail (`test_email_service.py`):** envio por STARTTLS e SSL, autenticação básica simulada, autenticação Hotmail OAuth2/XOAUTH2, validação de remetente e exigência de STARTTLS.
-- **Testes do cache OAuth (`test_hotmail_oauth.py`):** criptografia, permissões restritas, rejeição de chave incorreta e validação do Client ID.
+- **Testes de e-mail (`test_email_service.py`):** envio SMTP genérico por STARTTLS e SSL, envio Gmail com senha de app por STARTTLS e SSL, validação do remetente, rejeição de credenciais ausentes e recusa de modos de autenticação não suportados.
 
 Execute toda a suíte a partir da raiz do repositório (a pasta que contém `app.py`, `conta.py` e `tests/`):
 
