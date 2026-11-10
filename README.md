@@ -12,7 +12,7 @@ Aplicação web demonstrativa para gerenciamento individual de contas bancárias
 - Exportação dos próprios dados em JSON para download, incluindo cadastro, contas e movimentações, sem credenciais ou tokens de segurança.
 - Exclusão da própria conta com reautenticação, confirmação explícita e remoção transacional de contas, históricos e tokens associados.
 - Reenvio de confirmação e respostas genéricas para reduzir enumeração de contas.
-- Envio de mensagens transacionais por SMTP com TLS/SSL configurável.
+- Envio de mensagens transacionais por SMTP com TLS e autenticação OAuth2/XOAUTH2 para contas pessoais Hotmail.
 - Isolamento de contas e movimentações por usuário autenticado.
 - Autorização no backend para impedir acesso a contas de terceiros.
 - Proteção CSRF nas requisições que alteram dados.
@@ -62,7 +62,7 @@ As capturas de tela utilizadas neste README estão armazenadas em `docs/screensh
 - Decimal para cálculos monetários
 - Werkzeug para hash de senhas e validação de credenciais
 - Sessões Flask, proteção CSRF e cabeçalhos HTTP de segurança
-- SMTP para confirmação e recuperação de conta
+- SMTP com OAuth2/Modern Auth para confirmação e recuperação de conta
 - Redis opcional para limites de autenticação compartilhados
 
 **Front-end**
@@ -79,7 +79,7 @@ Além da suíte unitária e de integração, o workflow Testes operacionais e de
 - Build Docker e smoke test do container com configuração de produção, HTTPS encaminhado, HSTS, cookie Secure e volume SQLite.
 - Auditoria de dependências com pip-audit e análise estática Python com Bandit.
 
-O workflow Teste SMTP do provedor real é manual e envia uma única mensagem para SMTP_TEST_RECIPIENT. Para habilitá-lo, cadastre no GitHub Actions os secrets MAIL_SERVER, MAIL_FROM, SMTP_TEST_RECIPIENT e, conforme o provedor, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD, MAIL_USE_TLS e MAIL_USE_SSL. Não coloque credenciais no repositório.
+Para a conta pessoal Hotmail, o envio real usa OAuth2 (Modern Auth) e SMTP XOAUTH2; não utiliza senha normal da conta nem senha de aplicativo. Siga docs/HOTMAIL_OAUTH_SETUP.md para registrar o aplicativo Microsoft, autorizar a conta e proteger o cache de tokens. O teste de envio real é executado localmente com python scripts/smtp_provider_smoke.py e uma caixa de teste controlada.
 
 ### Executar o container localmente
 
@@ -95,6 +95,7 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
 ├── conta.py
 ├── database.py
 ├── email_service.py
+├── hotmail_oauth.py
 ├── rate_limit.py
 ├── Dockerfile
 ├── .dockerignore
@@ -106,9 +107,9 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
 ├── .github/
 │   └── workflows/
 │       ├── tests.yml
-│       ├── operational.yml
-│       └── smtp-provider.yml
+│       └── operational.yml
 ├── scripts/
+│   ├── setup_hotmail_oauth.py
 │   ├── smtp_provider_smoke.py
 │   └── backup_restore.py
 ├── instance/
