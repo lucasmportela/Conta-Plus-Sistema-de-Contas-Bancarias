@@ -6,7 +6,7 @@ Este repositório é um projeto educacional e **não está liberado para disponi
 
 ## Resultado da revisão atual
 
-- GitHub Actions: **50 testes automatizados aprovados** na execução mais recente.
+- GitHub Actions: **55 testes automatizados aprovados** na execução mais recente.
 - Os testes de Redis usam um cliente simulado e verificam os scripts Lua e a configuração; ainda falta um teste de integração contra uma instância Redis real.
 - O fluxo SMTP tem testes automatizados para STARTTLS, SSL e rejeição de configurações conflitantes; a entrega real ainda depende de validar o provedor, domínio e reputação do remetente.
 - HTTPS, cookies Secure, HSTS e ProxyFix estão protegidos por validações de configuração em produção, mas ainda precisam ser exercitados no ambiente real do provedor, com a topologia de proxy confirmada.
@@ -25,6 +25,7 @@ Este repositório é um projeto educacional e **não está liberado para disponi
 - Identificação do cliente baseada em `ProxyFix` somente quando a aplicação está em produção e a quantidade de proxies confiáveis é explicitamente configurada.
 - Lista de hosts permitidos, HTTPS obrigatório em produção, cookies Secure/HttpOnly/SameSite e HSTS.
 - Proteção CSRF, isolamento por proprietário e cabeçalhos CSP, X-Frame-Options, nosniff e Referrer-Policy.
+- Autoexclusão autenticada com senha atual, confirmação explícita, limitação de tentativas e remoção transacional de cadastro, contas, histórico e tokens.
 - Política de privacidade publicada no caminho `/privacidade`.
 
 ## Pré-requisitos para produção
@@ -33,7 +34,7 @@ Este repositório é um projeto educacional e **não está liberado para disponi
 - Configurar SMTP com credenciais secretas, TLS ou SSL, remetente autorizado e entrega monitorada.
 - Configurar Redis gerenciado e compartilhado se houver mais de uma instância. O backend Redis compartilha somente os contadores de autenticação; SQLite não é adequado como banco principal compartilhado entre várias instâncias. Migrar dados da aplicação para PostgreSQL antes de escalar horizontalmente.
 - Configurar armazenamento persistente, backups criptografados, restauração testada, monitoramento e alertas.
-- Definir processo de exclusão de contas e retenção de dados; a aplicação ainda não oferece autoexclusão.
+- Definir e testar a retenção de backups e logs após autoexclusão. Os dados operacionais são removidos do banco ativo, mas cópias de segurança podem persistir até o fim do prazo de retenção.
 - Validar domínio e e-mail do remetente, SPF, DKIM e DMARC.
 - Testar os fluxos de confirmação e recuperação com o provedor SMTP real, incluindo falhas temporárias, rejeições e reenvio.
 - Executar teste de integração com Redis real, além dos testes unitários com cliente simulado.
@@ -53,4 +54,5 @@ Este repositório é um projeto educacional e **não está liberado para disponi
 - Redis não substitui a migração do banco principal: a aplicação ainda usa SQLite.
 - O envio SMTP é síncrono e requer configuração/monitoramento operacional.
 - A política de privacidade é um modelo informativo do projeto, não aconselhamento jurídico.
+- Contadores HMAC de prevenção a abuso de outras origens podem permanecer até o prazo curto de expiração configurado (24 horas por padrão); IP e e-mail não são persistidos em texto puro.
 - A implementação precisa de teste de implantação em ambiente controlado antes de qualquer abertura pública.
