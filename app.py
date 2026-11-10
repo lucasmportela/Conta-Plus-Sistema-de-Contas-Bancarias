@@ -8,6 +8,7 @@ import time
 import secrets
 import sqlite3
 from datetime import timedelta
+from email.utils import parseaddr
 from hashlib import sha256
 from urllib.parse import urlencode, urljoin
 
@@ -56,17 +57,31 @@ if APP_ENV == "production":
     if mail_tls == mail_ssl:
         raise RuntimeError("Em produção, habilite exatamente uma opção: MAIL_USE_TLS ou MAIL_USE_SSL.")
     mail_auth_mode = os.getenv("MAIL_AUTH_MODE", "password").strip().lower()
-    if mail_auth_mode not in {"password", "oauth2"}:
-        raise RuntimeError("MAIL_AUTH_MODE deve ser password ou oauth2.")
-    if mail_auth_mode == "oauth2":
-        if os.getenv("MAIL_SERVER", "").strip().lower() != "smtp-mail.outlook.com":
-            raise RuntimeError("Para Hotmail, MAIL_SERVER deve ser smtp-mail.outlook.com.")
-        if os.getenv("MAIL_PORT", "587").strip() != "587" or not mail_tls or mail_ssl:
-            raise RuntimeError("Para Hotmail, configure porta 587 com STARTTLS.")
-        if not os.getenv("MAIL_USERNAME", "").strip().lower().endswith("@hotmail.com"):
-            raise RuntimeError("MAIL_USERNAME deve conter a conta pessoal @hotmail.com.")
-        if not os.getenv("MS_CLIENT_ID") or not os.getenv("MS_TOKEN_CACHE_ENCRYPTION_KEY"):
-            raise RuntimeError("Configure MS_CLIENT_ID e MS_TOKEN_CACHE_ENCRYPTION_KEY.")
+    if mail_auth_mode != "password":
+        raise RuntimeError(
+            "OAuth2 da Microsoft foi removido. Remova MAIL_AUTH_MODE=oauth2 "
+            "e configure Gmail SMTP com uma senha de app do Google."
+        )
+    mail_server = os.getenv("MAIL_SERVER", "").strip().lower()
+    if mail_server == "smtp.gmail.com":
+        mail_username = os.getenv("MAIL_USERNAME", "").strip().lower()
+        mail_password = os.getenv("MAIL_PASSWORD", "").strip()
+        mail_from = parseaddr(os.getenv("MAIL_FROM", ""))[1].strip().lower()
+        if not mail_username.endswith("@gmail.com"):
+            raise RuntimeError("MAIL_USERNAME deve conter a conta dedicada @gmail.com.")
+        if not mail_password:
+            raise RuntimeError("Configure MAIL_PASSWORD com uma senha de app do Google.")
+        if mail_from != mail_username:
+            raise RuntimeError("MAIL_FROM deve corresponder a MAIL_USERNAME no Gmail.")
+        mail_port = os.getenv("MAIL_PORT", "587").strip()
+        transporte_gmail_valido = (
+            (mail_port == "587" and mail_tls and not mail_ssl)
+            or (mail_port == "465" and mail_ssl and not mail_tls)
+        )
+        if not transporte_gmail_valido:
+            raise RuntimeError(
+                "Gmail SMTP exige porta 587 com STARTTLS ou porta 465 com SSL."
+            )
 if not SECRET_KEY:
     SECRET_KEY = secrets.token_hex(32)
 
