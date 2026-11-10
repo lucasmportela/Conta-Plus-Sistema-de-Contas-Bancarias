@@ -58,7 +58,9 @@ class TestEmailFlowsIntegration(unittest.TestCase):
         )
         with urllib.request.urlopen(request, timeout=5) as response:
             payload = json.loads(response.read().decode("utf-8"))
-        return payload.get("messages", payload if isinstance(payload, list) else [])
+        if isinstance(payload, list):
+            return payload
+        return payload.get("messages", [])
 
     def latest_message(self, subject, recipient):
         last_error = None
@@ -70,7 +72,8 @@ class TestEmailFlowsIntegration(unittest.TestCase):
                     if subject.lower() in serialized and recipient.lower() in serialized:
                         message_id = message.get("ID") or message.get("id")
                         if message_id:
-                            detail_url = MAILPIT_API_URL.rstrip("/messages") + "/message/" + str(message_id)
+                            messages_base = MAILPIT_API_URL.removesuffix("/messages")
+                            detail_url = messages_base + "/message/" + str(message_id)
                             request = urllib.request.Request(
                                 detail_url, headers={"Accept": "application/json"}
                             )
