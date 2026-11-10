@@ -7,27 +7,39 @@ from email.message import EmailMessage
 from email.utils import parseaddr
 
 
-def _enviar_com_oauth2(cliente, usuario):
-    """Autentica no SMTP Outlook.com usando SASL XOAUTH2."""
-    from hotmail_oauth import obter_token_acesso
+def _validar_configuracao_gmail(
+    servidor, porta, usuario, senha, remetente, usar_tls, usar_ssl
+):
+    """Valida o uso de uma conta Gmail dedicada com senha de app."""
+    if servidor.lower() != "smtp.gmail.com":
+        return senha
 
-    token = obter_token_acesso()
-    resposta = f"user={usuario}\x01auth=Bearer {token}\x01\x01"
-    try:
-        codigo, _mensagem = cliente.auth(
-            "XOAUTH2",
-            lambda _desafio: resposta,
-            initial_response_ok=True,
-        )
-    except smtplib.SMTPAuthenticationError:
+    usuario = usuario.strip().lower()
+    if not usuario.endswith("@gmail.com"):
+        raise RuntimeError("Para Gmail SMTP, MAIL_USERNAME deve ser uma conta @gmail.com.")
+    if not senha.strip():
         raise RuntimeError(
-            "A Microsoft recusou a autenticação OAuth2. "
-            "Confira a conta autorizada, o consentimento SMTP.Send e o cache OAuth."
-        ) from None
-    if codigo != 235:
-        raise RuntimeError(
-            "O servidor Outlook.com não confirmou a autenticação OAuth2."
+            "Configure MAIL_PASSWORD com uma senha de app do Google, não a senha normal."
         )
+
+    endereco_remetente = parseaddr(remetente)[1].strip().lower()
+    if endereco_remetente != usuario:
+        raise RuntimeError(
+            "O endereço de MAIL_FROM deve corresponder a MAIL_USERNAME no Gmail."
+        )
+
+    transporte_valido = (
+        (porta == 587 and usar_tls and not usar_ssl)
+        or (porta == 465 and usar_ssl and not usar_tls)
+    )
+    if not transporte_valido:
+        raise RuntimeError(
+            "Gmail SMTP exige porta 587 com STARTTLS ou porta 465 com SSL; "
+            "habilite somente uma opção de criptografia."
+        )
+
+    # O Google exibe a senha de app agrupada em blocos; espaços não fazem parte da senha.
+    return "".join(senha.split())
 
 
 def enviar_email(destinatario, assunto, corpo):
@@ -52,29 +64,19 @@ def enviar_email(destinatario, assunto, corpo):
     if usar_tls and usar_ssl:
         raise RuntimeError("MAIL_USE_TLS e MAIL_USE_SSL não podem estar ativos juntos.")
 
-    if modo_autenticacao not in {"password", "oauth2"}:
-        raise RuntimeError("MAIL_AUTH_MODE deve ser password ou oauth2.")
-    if servidor.lower() == "smtp-mail.outlook.com" and modo_autenticacao != "oauth2":
-        raise RuntimeError("Contas Hotmail/Outlook.com exigem autenticação OAuth2.")
+    if modo_autenticacao != "password":
+        if modo_autenticacao == "oauth2":
+            raise RuntimeError(
+                "A autenticação OAuth2 da Microsoft foi removida. "
+                "Configure Gmail SMTP com uma senha de app do Google."
+            )
+        raise RuntimeError("MAIL_AUTH_MODE deve ser password.")
 
-    if modo_autenticacao == "oauth2":
-        if servidor.lower() != "smtp-mail.outlook.com" or porta != 587:
-            raise RuntimeError(
-                "Para Hotmail, use smtp-mail.outlook.com na porta 587."
-            )
-        if not usar_tls or usar_ssl:
-            raise RuntimeError(
-                "O Hotmail exige STARTTLS: MAIL_USE_TLS=true e MAIL_USE_SSL=false."
-            )
-        if not usuario.lower().endswith("@hotmail.com"):
-            raise RuntimeError("MAIL_USERNAME deve ser a conta pessoal @hotmail.com.")
-        endereco_remetente = parseaddr(remetente)[1].strip().lower()
-        if endereco_remetente != usuario.lower():
-            raise RuntimeError(
-                "O endereço de MAIL_FROM deve corresponder à conta Hotmail autorizada."
-            )
-    elif modo_autenticacao == "password" and not usuario:
-        # Provedores SMTP sem autenticação continuam permitidos.
+    senha = _validar_configuracao_gmail(
+        servidor, porta, usuario, senha, remetente, usar_tls, usar_ssl
+    )
+    if not usuario:
+        # Servidores SMTP locais, como Mailpit, podem operar sem autenticação.
         senha = ""
 
     mensagem = EmailMessage()
@@ -88,9 +90,7 @@ def enviar_email(destinatario, assunto, corpo):
         with smtplib.SMTP_SSL(
             servidor, porta, timeout=10, context=contexto
         ) as cliente:
-            if modo_autenticacao == "oauth2":
-                _enviar_com_oauth2(cliente, usuario)
-            elif usuario:
+            if usuario:
                 cliente.login(usuario, senha)
             cliente.send_message(mensagem)
     else:
@@ -99,8 +99,6 @@ def enviar_email(destinatario, assunto, corpo):
             if usar_tls:
                 cliente.starttls(context=contexto)
                 cliente.ehlo()
-            if modo_autenticacao == "oauth2":
-                _enviar_com_oauth2(cliente, usuario)
-            elif usuario:
+            if usuario:
                 cliente.login(usuario, senha)
             cliente.send_message(mensagem)
