@@ -95,7 +95,8 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
 ├── tests/
 │   ├── test_conta.py
 │   ├── test_api.py
-│   └── test_database.py
+│   ├── test_database.py
+│   └── test_rate_limit.py
 └── docs/
     └── screenshots/
         ├── tela-inicial.png
@@ -270,13 +271,14 @@ As rotas protegidas exigem sessão autenticada. Requisições POST, PUT, PATCH e
 
 A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integração criam bancos SQLite temporários, isolados dos dados locais da aplicação.
 
-**Total: 42 testes automatizados — 8 testes unitários das regras de negócio, 25 testes de integração das rotas Flask e 9 testes da camada SQLite.**
+**Total: 46 testes automatizados — 8 testes unitários das regras de negócio, 26 testes de integração das rotas Flask, 9 testes da camada SQLite e 3 testes do backend de limitação com Redis.**
 
 **Cobertura:**
 
 - **Testes unitários (`test_conta.py`):** regras de depósito, saque, transferência e validação de valores.
 - **Testes das rotas (`test_api.py`):** cadastro pendente, confirmação e expiração de tokens, reenvio de confirmação, login bloqueado até confirmar e-mail, recuperação e redefinição de senha, uso único de tokens, revogação de sessões, respostas contra enumeração, limitação de tentativas, CSRF, autorização e isolamento de dados.
 - **Testes do banco (`test_database.py`):** criação de tabelas e índices, persistência, commit, rollback, unicidade, integridade referencial, consultas por proprietário, migração de banco legado e concorrência no bloqueio de login.
+- **Testes do limitador (`test_rate_limit.py`):** configuração do backend Redis, validação da URL, execução atômica dos scripts Lua e remoção dos contadores após autenticação bem-sucedida.
 
 Execute toda a suíte a partir da raiz do repositório (a pasta que contém `app.py`, `conta.py` e `tests/`):
 
@@ -313,6 +315,7 @@ O Conta+ continua sendo um projeto educacional de portfólio — não é um sist
 - Sessões expiram após 30 minutos e usam cookies `HttpOnly`, `SameSite=Lax` e, em produção, `Secure`.
 - Requisições que alteram dados exigem token CSRF; contas, extratos e operações são filtrados pelo proprietário.
 - Cadastro, login, reenvio de confirmação e solicitação de recuperação são limitados por IP e, quando aplicável, e-mail. O padrão é cinco solicitações em 15 minutos, com bloqueio por 15 minutos. Identificadores HMAC evitam gravar e-mails e IPs em texto puro no contador.
+- Cadastro, reenvio de confirmação e recuperação usam respostas genéricas para não revelar se um e-mail está cadastrado. Uma falha no SMTP também não altera a resposta pública; o usuário pode solicitar o reenvio da confirmação.
 - SQLite armazena os limites em uma instância; Redis pode compartilhar esses contadores entre instâncias. O banco principal continua SQLite, portanto Redis sozinho não torna o sistema multi-instância.
 - Em produção, a aplicação exige HTTPS, host permitido, quantidade explícita de proxies confiáveis, chave de sessão persistente e SMTP. O `ProxyFix` só confia nos saltos configurados.
 - A política em [`/privacidade`](https://github.com/lucasmportela/Conta-Plus-Sistema-de-Contas-Bancarias/blob/main/templates/privacy.html) é um aviso informativo do projeto, não um parecer jurídico. A instância ainda não oferece autoexclusão de conta.
