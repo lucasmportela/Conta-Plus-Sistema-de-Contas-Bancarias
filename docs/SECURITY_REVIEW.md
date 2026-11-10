@@ -26,6 +26,7 @@ A suíte principal mantém 58 testes. A automação operacional adiciona:
 - Integração com Redis 7 real: contagem, bloqueio, expiração, TTL, reset e concorrência.
 - Integração SMTP local com Mailpit: envio via SMTP e confirmação da mensagem recebida pela API do Mailpit. Não envia e-mail externo.
 - Smoke test do container: build Docker, inicialização com APP_ENV de produção, health endpoint, HSTS, cookie Secure/HttpOnly/SameSite e persistência do arquivo SQLite no volume.
+- Backup/restauração SQLite: snapshot pela API nativa, verificação de integridade e chaves estrangeiras, restauração para novo arquivo e proteção contra sobrescrita; usa apenas dados sintéticos.
 - Auditoria automatizada com pip-audit e Bandit.
 - Workflow manual para testar o provedor SMTP real, condicionado a secrets do GitHub Actions configurados pelo operador.
 
@@ -39,7 +40,7 @@ A suíte principal mantém 58 testes. A automação operacional adiciona:
 | Alta | Ainda não houve auditoria independente | Contratar revisão externa de autenticação, autorização, sessão, CSRF, XSS, SQL, infraestrutura e recuperação |
 | Média | Redis só compartilha contadores; não compartilha os dados da aplicação | Configurar Redis gerenciado com TLS/rede privada e manter uma instância até migrar o banco |
 | Média | SMTP é síncrono e sem fila/retry persistente | Definir monitoramento, política de retry e alertas para falhas de entrega |
-| Média | Backup e restauração reais não foram configurados/testados | Criar backups criptografados, testar restauração e documentar retenção/exclusão |
+| Média | Backup e restauração em infraestrutura externa ainda não foram configurados/testados | Usar scripts/backup_restore.py, escolher armazenamento criptografado, definir retenção e executar restauração real; os testes de CI usam apenas dados sintéticos |
 | Média | Aviso de privacidade não identifica operador, contato, fornecedores concretos, bases legais e prazos específicos | Completar dados reais do operador e obter revisão jurídica/privacidade adequada à LGPD |
 | Baixa | HSTS é emitido quando Flask reconhece a requisição como HTTPS | Verificar X-Forwarded-Proto e cabeçalhos no proxy real; avaliar includeSubDomains somente se todos os subdomínios suportarem HTTPS |
 
@@ -61,5 +62,6 @@ A interface deixou de carregar Google Fonts de terceiros, reduzindo uma transfer
 2. Teste do provedor SMTP real e autenticação do domínio de envio.
 3. Homologação com HTTPS, proxy e host reais.
 4. Backup e restauração demonstrados.
-5. Migração para PostgreSQL antes de múltiplas instâncias.
-6. Revisão externa independente e revisão da política de privacidade por profissional qualificado.
+5. Exercício de backup/restauração no armazenamento e infraestrutura escolhidos, com criptografia, retenção e evidência de recuperação.
+6. Migração para PostgreSQL antes de múltiplas instâncias.
+7. Revisão externa independente e revisão da política de privacidade por profissional qualificado.

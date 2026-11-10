@@ -109,7 +109,8 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
 │       ├── operational.yml
 │       └── smtp-provider.yml
 ├── scripts/
-│   └── smtp_provider_smoke.py
+│   ├── smtp_provider_smoke.py
+│   └── backup_restore.py
 ├── instance/
 │   └── contas.db             # Criado automaticamente ao iniciar
 ├── templates/
@@ -308,6 +309,8 @@ A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integra
 **Suíte principal: 58 testes automatizados — 8 testes unitários das regras de negócio, 34 testes de integração das rotas Flask, 9 testes da camada SQLite, 3 testes do backend de limitação com Redis simulado e 4 testes do serviço de e-mail SMTP simulado.**
 
 **Integração operacional adicional: 4 testes — 3 contra Redis real e 1 contra Mailpit local.** Eles são executados pelo workflow operacional; ao rodar somente a suíte principal sem serviços configurados, aparecem como ignorados (*skipped*).
+
+Os testes de backup/restauração usam registros sintéticos, verificam a integridade SQLite e garantem que a restauração não sobrescreva arquivos existentes. Eles não configuram backup externo nem comprovam recuperação em produção. Consulte docs/BACKUP_RESTORE.md.
 
 **Cobertura:**
 

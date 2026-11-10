@@ -79,6 +79,19 @@ jobs:
           MAILPIT_API_URL: http://127.0.0.1:8025/api/v1/messages
         run: python -m unittest discover -s tests -p "test_email_service_integration.py" -v
 
+  backup-restore:
+    name: Backup e restauração SQLite com dados sintéticos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Testar criação, validação e restauração sem sobrescrita
+        run: python -m unittest discover -s tests -p "test_backup_restore.py" -v
+      - name: Executar exercício completo com registros fictícios
+        run: python scripts/backup_restore.py self-test
+
   container-smoke:
     name: Imagem Docker e configuração HTTPS
     runs-on: ubuntu-latest

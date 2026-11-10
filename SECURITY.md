@@ -46,7 +46,7 @@ A rota `GET /api/account/export` exige sessão autenticada e entrega um arquivo 
 - Configurar `SECRET_KEY` forte e persistente, `PUBLIC_BASE_URL` HTTPS, `TRUSTED_HOSTS` e `TRUSTED_PROXY_HOPS` com os valores reais do provedor.
 - Configurar SMTP com credenciais secretas, TLS ou SSL, remetente autorizado e entrega monitorada.
 - Configurar Redis gerenciado e compartilhado se houver mais de uma instância. O backend Redis compartilha somente os contadores de autenticação; SQLite não é adequado como banco principal compartilhado entre várias instâncias. Migrar dados da aplicação para PostgreSQL antes de escalar horizontalmente.
-- Configurar armazenamento persistente em /data com permissões para UID/GID 10001 (usuário não-root appuser), backups criptografados, restauração testada, monitoramento e alertas.
+- Configurar armazenamento persistente em /data com permissões para UID/GID 10001 (usuário não-root appuser), backups criptografados em destino externo, retenção, restauração testada, monitoramento e alertas. O script scripts/backup_restore.py e os testes com dados sintéticos validam a lógica local, não substituem a configuração do provedor.
 - Definir e testar a retenção de backups e logs após autoexclusão. Os dados operacionais são removidos do banco ativo, mas cópias de segurança podem persistir até o fim do prazo de retenção.
 - Validar domínio e e-mail do remetente, SPF, DKIM e DMARC.
 - Testar os fluxos de confirmação e recuperação com o provedor SMTP real, incluindo falhas temporárias, rejeições e reenvio.
@@ -68,4 +68,4 @@ A rota `GET /api/account/export` exige sessão autenticada e entrega um arquivo 
 - O envio SMTP é síncrono e requer configuração/monitoramento operacional; a integração Mailpit não prova entregabilidade do provedor real.
 - A política de privacidade é um modelo informativo do projeto, não aconselhamento jurídico.
 - Contadores HMAC de prevenção a abuso de outras origens podem permanecer até o prazo curto de expiração configurado (24 horas por padrão); IP e e-mail não são persistidos em texto puro.
-- O smoke test Docker é executado em CI, mas a implantação em provedor real, a topologia de proxy e o teste de restauração ainda não foram realizados.
+- O smoke test Docker e o teste automatizado de backup/restauração com dados sintéticos são executados em CI. A implantação em provedor real, a topologia de proxy e o exercício de backup/restauração em infraestrutura externa ainda não foram realizados.
