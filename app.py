@@ -12,6 +12,10 @@ from hashlib import sha256
 from urllib.parse import urlencode, urljoin
 
 from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
+
 from flask import Flask, jsonify, render_template, request, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -23,8 +27,6 @@ from database import (
 from email_service import enviar_email
 from rate_limit import LoginRateLimiter
 
-BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
