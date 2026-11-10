@@ -6,7 +6,7 @@ Este repositório é um projeto educacional e **não está liberado para disponi
 
 ## Resultado da revisão atual
 
-- GitHub Actions: **46 testes automatizados aprovados** na execução mais recente.
+- GitHub Actions: **50 testes automatizados aprovados** na execução mais recente.
 - Os testes de Redis usam um cliente simulado e verificam os scripts Lua e a configuração; ainda falta um teste de integração contra uma instância Redis real.
 - O fluxo SMTP tem testes automatizados para STARTTLS, SSL e rejeição de configurações conflitantes; a entrega real ainda depende de validar o provedor, domínio e reputação do remetente.
 - HTTPS, cookies Secure, HSTS e ProxyFix estão protegidos por validações de configuração em produção, mas ainda precisam ser exercitados no ambiente real do provedor, com a topologia de proxy confirmada.
