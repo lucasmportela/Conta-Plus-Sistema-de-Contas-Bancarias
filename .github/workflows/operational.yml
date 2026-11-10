@@ -147,4 +147,4 @@ jobs:
       - name: Verificar vulnerabilidades conhecidas nas dependências
         run: pip-audit -r requirements.txt
       - name: Análise estática de segurança Python
-        run: bandit -q -r app.py conta.py database.py email_service.py rate_limit.py
+        run: bandit -q -r app.py conta.py database.py email_service.py hotmail_oauth.py rate_limit.py scripts/setup_hotmail_oauth.py
