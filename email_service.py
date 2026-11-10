@@ -54,6 +54,8 @@ def enviar_email(destinatario, assunto, corpo):
 
     if modo_autenticacao not in {"password", "oauth2"}:
         raise RuntimeError("MAIL_AUTH_MODE deve ser password ou oauth2.")
+    if servidor.lower() == "smtp-mail.outlook.com" and modo_autenticacao != "oauth2":
+        raise RuntimeError("Contas Hotmail/Outlook.com exigem autenticação OAuth2.")
 
     if modo_autenticacao == "oauth2":
         if servidor.lower() != "smtp-mail.outlook.com" or porta != 587:
