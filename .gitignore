@@ -6,7 +6,7 @@ __pycache__/
 venv/
 .env
 
-# Banco de dados local
+# Banco de dados local e cache de tokens OAuth criptografado
 instance/
 *.db
 *.sqlite
