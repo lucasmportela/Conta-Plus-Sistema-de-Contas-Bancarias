@@ -109,9 +109,9 @@ class TestEmailService(unittest.TestCase):
             MAIL_USE_TLS="true",
             MAIL_USE_SSL="false",
         )
-        with configuracao, \\
-             patch("email_service.smtplib.SMTP", return_value=cliente) as smtp, \\
-             patch("email_service.ssl.create_default_context", return_value=contexto), \\
+        with configuracao, \
+             patch("email_service.smtplib.SMTP", return_value=cliente) as smtp, \
+             patch("email_service.ssl.create_default_context", return_value=contexto), \
              patch("hotmail_oauth.obter_token_acesso", return_value="token-falso-de-teste"):
             enviar_email("destino@example.test", "Assunto", "Corpo")
 
@@ -123,7 +123,7 @@ class TestEmailService(unittest.TestCase):
         self.assertEqual(autenticacao[0:2], ("auth", "XOAUTH2"))
         self.assertEqual(
             autenticacao[2],
-            "user=conta@hotmail.com\\x01auth=Bearer token-falso-de-teste\\x01\\x01",
+            "user=conta@hotmail.com\x01auth=Bearer token-falso-de-teste\x01\x01",
         )
         self.assertTrue(autenticacao[3])
         self.assertEqual(cliente.calls[4][0], "send_message")
