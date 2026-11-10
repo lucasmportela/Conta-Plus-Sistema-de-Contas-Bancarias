@@ -796,6 +796,113 @@ def api_extrato(conta_id):
     })
 
 
+@app.delete("/api/account")
+@requer_autenticacao
+def api_excluir_conta():
+    dados = request.get_json(silent=True) or {}
+    senha_atual = str(dados.get("senha_atual", ""))
+    confirmacao = str(dados.get("confirmacao", ""))
+
+    if not senha_atual or len(senha_atual) > 128:
+        return resposta_erro("Informe sua senha atual.")
+    if confirmacao != "EXCLUIR":
+        return resposta_erro('Digite exatamente "EXCLUIR" para confirmar.')
+
+    usuario_id = session["usuario_id"]
+    with conectar() as conn:
+        usuario = conn.execute(
+            "SELECT email FROM usuarios WHERE id = ?",
+            (usuario_id,),
+        ).fetchone()
+    if usuario is None:
+        session.clear()
+        return resposta_erro("Sessão inválida. Entre novamente.", 401)
+
+    chave = chave_tentativas_login(usuario["email"], "account-delete")
+    agora = int(time.time())
+    bloqueio = rate_limiter.blocked_seconds(
+        chave, agora, app.config["LOGIN_WINDOW_SECONDS"],
+        app.config["LOGIN_ATTEMPT_RETENTION_SECONDS"],
+    )
+    if bloqueio:
+        return resposta_bloqueio_login(bloqueio)
+
+    senha_invalida = False
+    usuario_ausente = False
+    with conectar() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        credencial = conn.execute(
+            "SELECT senha_hash FROM usuarios WHERE id = ?",
+            (usuario_id,),
+        ).fetchone()
+        if credencial is None:
+            usuario_ausente = True
+        elif not check_password_hash(credencial["senha_hash"], senha_atual):
+            senha_invalida = True
+        else:
+            # Remove referências a contas do titular em históricos de terceiros
+            # antes de apagar as contas, sem expor novamente nome ou número.
+            conn.execute(
+                """
+                UPDATE transacoes
+                SET conta_relacionada_id = NULL,
+                    descricao = 'Movimentação relacionada a uma conta removida'
+                WHERE conta_relacionada_id IN (
+                    SELECT id FROM contas WHERE owner_id = ?
+                )
+                AND conta_id NOT IN (
+                    SELECT id FROM contas WHERE owner_id = ?
+                )
+                """,
+                (usuario_id, usuario_id),
+            )
+            # O histórico pertencente às contas do titular é removido por completo.
+            conn.execute(
+                """
+                DELETE FROM transacoes
+                WHERE conta_id IN (SELECT id FROM contas WHERE owner_id = ?)
+                """,
+                (usuario_id,),
+            )
+            conn.execute("DELETE FROM contas WHERE owner_id = ?", (usuario_id,))
+            conn.execute(
+                "DELETE FROM email_verification_tokens WHERE user_id = ?",
+                (usuario_id,),
+            )
+            conn.execute(
+                "DELETE FROM password_reset_tokens WHERE user_id = ?",
+                (usuario_id,),
+            )
+            conn.execute("DELETE FROM usuarios WHERE id = ?", (usuario_id,))
+
+    if usuario_ausente:
+        session.clear()
+        return resposta_erro("Sessão inválida. Entre novamente.", 401)
+
+    if senha_invalida:
+        bloqueio = rate_limiter.record_failure(
+            chave, agora, app.config["LOGIN_MAX_ATTEMPTS"],
+            app.config["LOGIN_WINDOW_SECONDS"], app.config["LOGIN_BLOCK_SECONDS"],
+            app.config["LOGIN_ATTEMPT_RETENTION_SECONDS"],
+        )
+        if bloqueio:
+            return resposta_bloqueio_login(bloqueio)
+        return resposta_erro("Senha atual incorreta.", 403)
+
+    # Remove contadores desta origem. Contadores de outras origens permanecem
+    # somente até a expiração curta configurada para prevenção de abuso.
+    for acao in ("login", "resend-verification", "password-reset", "account-delete"):
+        try:
+            rate_limiter.reset(chave_tentativas_login(usuario["email"], acao))
+        except Exception:
+            app.logger.exception("Falha ao limpar contador temporário de segurança.")
+
+    session.clear()
+    return jsonify({
+        "mensagem": "Sua conta e os dados associados foram excluídos com sucesso."
+    })
+
+
 @app.errorhandler(404)
 def nao_encontrado(_erro):
     if request.path.startswith("/api/"):
