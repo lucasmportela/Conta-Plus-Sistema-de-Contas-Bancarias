@@ -10,7 +10,7 @@ Este repositório é um projeto educacional. A lista abaixo documenta controles 
 - Confirmação de e-mail obrigatória antes do login.
 - Tokens de confirmação e recuperação armazenados somente como SHA-256, com expiração e uso único.
 - Recuperação de senha incrementa a versão da sessão e invalida sessões anteriores.
-- Respostas genéricas para reenvio de confirmação e solicitação de recuperação, reduzindo enumeração de contas.
+- Respostas genéricas para cadastro, reenvio de confirmação e solicitação de recuperação, inclusive quando o SMTP falha, reduzindo enumeração de contas.
 - Limitação de cadastro, login, reenvio e recuperação; SQLite para uma instância e Redis opcional para compartilhar os contadores.
 - Identificação do cliente baseada em `ProxyFix` somente quando a aplicação está em produção e a quantidade de proxies confiáveis é explicitamente configurada.
 - Lista de hosts permitidos, HTTPS obrigatório em produção, cookies Secure/HttpOnly/SameSite e HSTS.
