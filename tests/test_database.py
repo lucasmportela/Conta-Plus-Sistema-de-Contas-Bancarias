@@ -66,8 +66,14 @@ class TestDatabaseIntegration(unittest.TestCase):
         self.assertIn("usuarios", tabelas)
         self.assertIn("contas", tabelas)
         self.assertIn("transacoes", tabelas)
+        self.assertIn("tentativas_login", tabelas)
         self.assertIn("owner_id", colunas)
         self.assertIn("idx_contas_owner_id", indices)
+        with database.conectar() as conn:
+            indices_login = {
+                row["name"] for row in conn.execute("PRAGMA index_list(tentativas_login)")
+            }
+        self.assertIn("idx_tentativas_login_atualizado_em", indices_login)
         self.assertEqual(foreign_keys, 1)
 
     def test_conexao_confirma_dados_ao_finalizar(self):
