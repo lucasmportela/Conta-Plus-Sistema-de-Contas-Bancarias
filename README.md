@@ -143,7 +143,11 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
         └── .gitkeep
 ```
 
-## Publicação gratuita\n\nA configuração para Render Free + Turso Free + Brevo Free está em [docs/DEPLOY_FREE.md](docs/DEPLOY_FREE.md). A demonstração é destinada a portfólio e não deve armazenar dados financeiros reais.\n\n## Como executar
+## Publicação gratuita
+
+A configuração para Render Free + Turso Free + Brevo Free está em [docs/DEPLOY_FREE.md](docs/DEPLOY_FREE.md). A demonstração é destinada a portfólio e não deve armazenar dados financeiros reais. O plano gratuito do Brevo inclui até 300 envios por dia e mantém a identificação visual da plataforma nos e-mails. Consulte também a observação sobre o remetente Gmail no guia de publicação.
+
+## Como executar
 
 ### 1. Pré-requisitos
 
