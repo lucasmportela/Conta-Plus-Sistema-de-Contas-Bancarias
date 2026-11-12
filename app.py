@@ -790,7 +790,7 @@ def api_criar_conta():
                     conn, conta_id, "DEPOSITO INICIAL", "Depósito inicial",
                     saldo_inicial, Decimal("0.00"), saldo_inicial
                 )
-    except sqlite3.IntegrityError:
+    except INTEGRITY_ERRORS:
         return resposta_erro("Já existe uma conta com esse número.", 409)
 
     return jsonify({
