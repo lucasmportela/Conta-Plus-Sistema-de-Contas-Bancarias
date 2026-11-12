@@ -59,6 +59,7 @@ def _enviar_por_brevo(destinatario, assunto, corpo, remetente, api_key):
         }],
         "subject": assunto,
         "textContent": corpo,
+        "replyTo": {"email": endereco_remetente},
     }
     requisicao = urllib.request.Request(
         "https://api.brevo.com/v3/smtp/email",
