@@ -12,7 +12,7 @@ Aplicação web demonstrativa para gerenciamento individual de contas bancárias
 - Exportação dos próprios dados em JSON para download, incluindo cadastro, contas e movimentações, sem credenciais ou tokens de segurança.
 - Exclusão da própria conta com reautenticação, confirmação explícita e remoção transacional de contas, históricos e tokens associados.
 - Reenvio de confirmação e respostas genéricas para reduzir enumeração de contas.
-- Envio de mensagens transacionais por Gmail SMTP com TLS e senha de app para confirmação de e-mail e recuperação de senha.
+- Envio de mensagens transacionais por Gmail SMTP no ambiente local ou API HTTPS Brevo na demonstração hospedada.
 - Isolamento de contas e movimentações por usuário autenticado.
 - Autorização no backend para impedir acesso a contas de terceiros.
 - Proteção CSRF nas requisições que alteram dados.
@@ -62,7 +62,7 @@ As capturas de tela utilizadas neste README estão armazenadas em `docs/screensh
 - Decimal para cálculos monetários
 - Werkzeug para hash de senhas e validação de credenciais
 - Sessões Flask, proteção CSRF e cabeçalhos HTTP de segurança
-- Gmail SMTP com TLS e senha de app para confirmação e recuperação de conta
+- Gmail SMTP local ou API HTTPS Brevo para confirmação e recuperação de conta
 - Redis opcional para limites de autenticação compartilhados
 
 **Front-end**
@@ -80,7 +80,7 @@ Além da suíte unitária e de integração, o workflow Testes operacionais e de
 - Build Docker e smoke test do container com configuração de produção, HTTPS encaminhado, HSTS, cookie Secure e volume SQLite.
 - Auditoria de dependências com pip-audit e análise estática Python com Bandit.
 
-Para o envio real, use uma conta Gmail exclusiva do projeto e gere uma senha de app após habilitar a verificação em duas etapas. Siga [Configurar Gmail SMTP no Conta+](docs/SMTP_PROVIDER_SETUP.md). Não use a senha normal da conta nem envie credenciais ao GitHub. O teste de envio real é executado localmente com `python scripts/smtp_provider_smoke.py` e uma caixa de teste controlada.
+Para testar localmente, use Gmail SMTP com uma conta exclusiva e senha de app, conforme [Configurar Gmail SMTP no Conta+](docs/SMTP_PROVIDER_SETUP.md). Para a demonstração hospedada no Render Free, a aplicação usa a API HTTPS do Brevo. Consulte [Guia de publicação gratuita](docs/DEPLOY_FREE.md). Nunca envie credenciais ao GitHub.
 
 ### Executar o container localmente
 
@@ -98,6 +98,7 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
 ├── email_service.py
 ├── rate_limit.py
 ├── Dockerfile
+├── render.yaml
 ├── .dockerignore
 ├── requirements.txt
 ├── .env.example
@@ -132,6 +133,7 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
 └── docs/
     ├── SECURITY_REVIEW.md
     ├── SMTP_PROVIDER_SETUP.md
+    ├── DEPLOY_FREE.md
     └── screenshots/
         ├── tela-inicial.png
         ├── novo-cadastro.png
@@ -141,7 +143,7 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
         └── .gitkeep
 ```
 
-## Como executar
+## Publicação gratuita\n\nA configuração para Render Free + Turso Free + Brevo Free está em [docs/DEPLOY_FREE.md](docs/DEPLOY_FREE.md). A demonstração é destinada a portfólio e não deve armazenar dados financeiros reais.\n\n## Como executar
 
 ### 1. Pré-requisitos
 
@@ -229,7 +231,7 @@ Acesse no navegador:
 http://127.0.0.1:5000
 ```
 
-O banco SQLite e as tabelas são criados automaticamente na primeira execução. A migração adiciona os campos de confirmação de e-mail e versão de sessão; usuários antigos passam a precisar confirmar o endereço antes de entrar.
+O banco SQLite local e as tabelas são criados automaticamente na primeira execução. Na hospedagem, configure `DATABASE_BACKEND=turso`, `TURSO_DATABASE_URL` e `TURSO_AUTH_TOKEN` para persistir os dados fora do disco temporário do Render. A migração adiciona os campos de confirmação de e-mail e versão de sessão; usuários antigos passam a precisar confirmar o endereço antes de entrar.
 
 ### Configuração de produção
 
@@ -240,7 +242,7 @@ A aplicação recusa iniciar em produção sem uma chave forte, URL pública HTT
 - `PUBLIC_BASE_URL`: URL HTTPS canônica da aplicação.
 - `TRUSTED_HOSTS`: lista separada por vírgulas dos domínios permitidos; o domínio de `PUBLIC_BASE_URL` deve constar nela.
 - `TRUSTED_PROXY_HOPS`: quantidade exata de proxies confiáveis que acrescentam `X-Forwarded-*`. Não estime esse valor.
-- `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` e `MAIL_USE_TLS` ou `MAIL_USE_SSL`.
+- `MAIL_PROVIDER=smtp` com as variáveis SMTP locais, ou `MAIL_PROVIDER=brevo`, `BREVO_API_KEY` e `MAIL_FROM` para a hospedagem.
 - `LOGIN_RATE_LIMIT_BACKEND=sqlite` para uma instância ou `redis` com `REDIS_URL` para contadores compartilhados.
 
 O `.env.example` contém um modelo de configuração. O `ProxyFix` só é ativado em produção, com os saltos explicitamente definidos. HTTPS é obrigatório, cookies recebem `Secure`, e a aplicação envia HSTS e cabeçalhos de segurança. Consulte [SECURITY.md](SECURITY.md).
