@@ -3,7 +3,7 @@ services:
     name: conta-plus-demo
     runtime: docker
     plan: free
-    region: ohio
+    region: virginia
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
     autoDeployTrigger: commit
