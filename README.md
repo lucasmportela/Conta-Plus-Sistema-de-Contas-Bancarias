@@ -40,6 +40,10 @@ A aplicação está publicada no Render Free, com banco remoto Turso e envio de 
 
 ## Capturas de tela
 
+### Tela Login
+Tela de login
+![Tela Login](docs/screenshots/tela-login.png)
+
 ### Painel inicial
 Indicadores das contas do usuário autenticado: total de contas, saldo consolidado e quantidade de movimentações.
 ![Painel inicial](docs/screenshots/tela-inicial.png)
