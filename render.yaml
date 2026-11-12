@@ -6,7 +6,7 @@ services:
     region: virginia
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
-    autoDeployTrigger: checksPass
+    autoDeployTrigger: commit
     envVars:
       - key: APP_ENV
         value: production
