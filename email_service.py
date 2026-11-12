@@ -1,10 +1,13 @@
-"""Envio SMTP de mensagens transacionais do Conta+."""
+"""Envio de e-mails transacionais via SMTP local/Gmail ou API HTTPS Brevo."""
 
+import json
 import os
 import smtplib
 import ssl
+import urllib.error
+import urllib.request
 from email.message import EmailMessage
-from email.utils import parseaddr
+from email.utils import formataddr, parseaddr
 
 
 def _validar_configuracao_gmail(
@@ -38,17 +41,69 @@ def _validar_configuracao_gmail(
             "habilite somente uma opção de criptografia."
         )
 
-    # O Google exibe a senha de app agrupada em blocos; espaços não fazem parte da senha.
     return "".join(senha.split())
 
 
-def enviar_email(destinatario, assunto, corpo):
-    servidor = os.getenv("MAIL_SERVER", "").strip()
-    remetente = os.getenv("MAIL_FROM", "").strip()
-    if not servidor or not remetente:
+def _enviar_por_brevo(destinatario, assunto, corpo, remetente, api_key):
+    """Envia uma mensagem transacional pela API HTTPS da Brevo."""
+    nome_remetente, endereco_remetente = parseaddr(remetente)
+    nome_destinatario, endereco_destinatario = parseaddr(destinatario)
+    if not endereco_remetente or not endereco_destinatario:
+        raise RuntimeError("Remetente ou destinatário inválido para o envio pela Brevo.")
+
+    payload = {
+        "sender": {"name": nome_remetente or "Conta+", "email": endereco_remetente},
+        "to": [{
+            "email": endereco_destinatario,
+            **({"name": nome_destinatario} if nome_destinatario else {}),
+        }],
+        "subject": assunto,
+        "textContent": corpo,
+    }
+    requisicao = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "accept": "application/json",
+            "api-key": api_key,
+            "content-type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(requisicao, timeout=15) as resposta:
+            if resposta.status not in (200, 201, 202):
+                raise RuntimeError(
+                    f"A API Brevo retornou um status inesperado: {resposta.status}."
+                )
+    except urllib.error.HTTPError as erro:
+        # Não propaga headers, chave de API ou corpo bruto do provedor para os logs.
         raise RuntimeError(
-            "Configure MAIL_SERVER e MAIL_FROM para habilitar o envio de e-mails."
-        )
+            f"A API Brevo recusou o envio (HTTP {erro.code}). "
+            "Confira a chave, o remetente validado e os limites da conta."
+        ) from None
+    except urllib.error.URLError:
+        raise RuntimeError("Não foi possível conectar à API Brevo por HTTPS.") from None
+
+
+def enviar_email(destinatario, assunto, corpo):
+    remetente = os.getenv("MAIL_FROM", "").strip()
+    if not remetente:
+        raise RuntimeError("Configure MAIL_FROM para habilitar o envio de e-mails.")
+
+    provedor = os.getenv("MAIL_PROVIDER", "smtp").strip().lower()
+    if provedor == "brevo":
+        api_key = os.getenv("BREVO_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError("Configure BREVO_API_KEY para usar o envio pela API Brevo.")
+        _enviar_por_brevo(destinatario, assunto, corpo, remetente, api_key)
+        return
+    if provedor != "smtp":
+        raise RuntimeError("MAIL_PROVIDER deve ser smtp ou brevo.")
+
+    servidor = os.getenv("MAIL_SERVER", "").strip()
+    if not servidor:
+        raise RuntimeError("Configure MAIL_SERVER para habilitar o envio SMTP.")
 
     porta = int(os.getenv("MAIL_PORT", "587"))
     usuario = os.getenv("MAIL_USERNAME", "").strip()
