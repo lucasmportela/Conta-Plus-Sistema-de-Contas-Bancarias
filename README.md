@@ -17,7 +17,7 @@ Aplicação web demonstrativa para gerenciamento individual de contas bancárias
 - Autorização no backend para impedir acesso a contas de terceiros.
 - Proteção CSRF nas requisições que alteram dados.
 - Limitação de tentativas no cadastro, login, reenvio de confirmação e recuperação: cinco solicitações por chave em 15 minutos, com bloqueio temporário de 15 minutos.
-- Backend SQLite para uma instância ou Redis compartilhado opcional para os contadores.
+- Banco SQLite local ou Turso remoto compatível com SQLite; Redis opcional para os contadores.
 - Cadastro de contas com titular, número e saldo inicial.
 - Validação de nomes, números de conta e valores.
 - Depósitos com atualização automática do saldo.
@@ -26,7 +26,7 @@ Aplicação web demonstrativa para gerenciamento individual de contas bancárias
 - Bloqueio de transferência para a própria conta.
 - Extrato individual com histórico das movimentações.
 - Painel com total de contas, saldo consolidado e quantidade de movimentações do usuário autenticado.
-- Persistência local dos dados em SQLite, com vínculo entre contas e usuários.
+- Persistência local em SQLite no desenvolvimento e remota no Turso na demonstração hospedada, com vínculo entre contas e usuários.
 - Interface responsiva para desktop e dispositivos móveis.
 
 ## Demonstração Visual
@@ -58,7 +58,7 @@ As capturas de tela utilizadas neste README estão armazenadas em `docs/screensh
 **Back-end**
 - Python
 - Flask
-- SQLite
+- SQLite / Turso (compatível com SQLite)
 - Decimal para cálculos monetários
 - Werkzeug para hash de senhas e validação de credenciais
 - Sessões Flask, proteção CSRF e cabeçalhos HTTP de segurança
@@ -77,14 +77,14 @@ Além da suíte unitária e de integração, o workflow Testes operacionais e de
 - Testes de integração contra Redis 7 real, incluindo concorrência, bloqueio, expiração e TTL.
 - Envio SMTP para Mailpit local e confirmação da mensagem recebida; nenhuma mensagem é enviada à Internet nesse teste.
 - Fluxos completos via Mailpit: cadastro e confirmação de e-mail, reenvio com invalidação do link anterior, solicitação de recuperação, redefinição de senha e novo login.
-- Build Docker e smoke test do container com configuração de produção, HTTPS encaminhado, HSTS, cookie Secure e volume SQLite.
+- Build Docker e smoke test do container com configuração de produção, HTTPS encaminhado, HSTS e cookie Secure.
 - Auditoria de dependências com pip-audit e análise estática Python com Bandit.
 
 Para testar localmente, use Gmail SMTP com uma conta exclusiva e senha de app, conforme [Configurar Gmail SMTP no Conta+](docs/SMTP_PROVIDER_SETUP.md). Para a demonstração hospedada no Render Free, a aplicação usa a API HTTPS do Brevo. Consulte [Guia de publicação gratuita](docs/DEPLOY_FREE.md). Nunca envie credenciais ao GitHub.
 
 ### Executar o container localmente
 
-Construa a imagem com docker build -t conta-plus .. Para executar em modo de produção, configure as variáveis obrigatórias de segredo, HTTPS, host, proxy e SMTP, monte um volume persistente em /data com proprietário UID/GID 10001 (usuário appuser) e mantenha apenas uma instância enquanto o banco principal for SQLite. O container roda como usuário não-root e usa Gunicorn. Consulte SECURITY.md antes de configurar um ambiente real.
+Construa a imagem com `docker build -t conta-plus .`. Para executar o modo local com SQLite, monte um volume persistente em `/data`. Para usar a configuração remota, instale as dependências do projeto e defina `DATABASE_BACKEND=turso`, `TURSO_DATABASE_URL` e `TURSO_AUTH_TOKEN`. Configure `MAIL_PROVIDER=brevo` e `BREVO_API_KEY` quando estiver hospedado no Render Free. O container roda como usuário não-root e usa Gunicorn.
 
 A integração Mailpit valida o transporte e o recebimento local, mas não substitui o teste com o provedor SMTP real. A revisão técnica preliminar está em docs/SECURITY_REVIEW.md; ela não é auditoria independente nem parecer jurídico.
 
@@ -235,7 +235,7 @@ O banco SQLite local e as tabelas são criados automaticamente na primeira execu
 
 ### Configuração de produção
 
-A aplicação recusa iniciar em produção sem uma chave forte, URL pública HTTPS, hosts permitidos, número explícito de proxies confiáveis e configuração SMTP. Configure estas variáveis no ambiente do provedor, nunca no repositório:
+A aplicação recusa iniciar em produção sem uma chave forte, URL pública HTTPS, hosts permitidos, número explícito de proxies confiáveis, banco configurado e provedor de e-mail válido. Configure estas variáveis no ambiente do provedor, nunca no repositório:
 
 - `APP_ENV=production`
 - `SECRET_KEY`: valor aleatório persistente com pelo menos 32 caracteres.
@@ -247,7 +247,7 @@ A aplicação recusa iniciar em produção sem uma chave forte, URL pública HTT
 
 O `.env.example` contém um modelo de configuração. O `ProxyFix` só é ativado em produção, com os saltos explicitamente definidos. HTTPS é obrigatório, cookies recebem `Secure`, e a aplicação envia HSTS e cabeçalhos de segurança. Consulte [SECURITY.md](SECURITY.md).
 
-**Escalabilidade:** Redis compartilha somente os contadores de autenticação. O banco principal ainda é SQLite e deve permanecer em uma única instância com armazenamento persistente. Para múltiplas instâncias da aplicação, migre também os dados principais para PostgreSQL e revise as transações antes de escalar.
+**Banco remoto:** o backend Turso mantém a compatibilidade SQLite para a demonstração hospedada. Redis compartilha somente os contadores de autenticação; não é necessário para a configuração gratuita de uma instância.
 
 ## 🔌 API REST
 
@@ -358,9 +358,9 @@ O Conta+ continua sendo um projeto educacional de portfólio — não é um sist
 - Sessões expiram após 30 minutos e usam cookies `HttpOnly`, `SameSite=Lax` e, em produção, `Secure`.
 - Requisições que alteram dados exigem token CSRF; contas, extratos e operações são filtrados pelo proprietário.
 - Cadastro, login, reenvio de confirmação e solicitação de recuperação são limitados por IP e, quando aplicável, e-mail. O padrão é cinco solicitações em 15 minutos, com bloqueio por 15 minutos. Identificadores HMAC evitam gravar e-mails e IPs em texto puro no contador.
-- Cadastro, reenvio de confirmação e recuperação usam respostas genéricas para não revelar se um e-mail está cadastrado. Uma falha no SMTP também não altera a resposta pública; o usuário pode solicitar o reenvio da confirmação.
+- Cadastro, reenvio de confirmação e recuperação usam respostas genéricas para não revelar se um e-mail está cadastrado. Uma falha no provedor de e-mail também não altera a resposta pública; o usuário pode solicitar o reenvio da confirmação.
 - SQLite armazena os limites em uma instância; Redis pode compartilhar esses contadores entre instâncias. O banco principal continua SQLite, portanto Redis sozinho não torna o sistema multi-instância.
-- Em produção, a aplicação exige HTTPS, host permitido, quantidade explícita de proxies confiáveis, chave de sessão persistente e SMTP. O `ProxyFix` só confia nos saltos configurados.
+- Em produção, a aplicação exige HTTPS, host permitido, quantidade explícita de proxies confiáveis, chave de sessão persistente, banco configurado e provedor de e-mail válido. O `ProxyFix` só confia nos saltos configurados.
 - A política em [`/privacidade`](https://github.com/lucasmportela/Conta-Plus-Sistema-de-Contas-Bancarias/blob/main/templates/privacy.html) é um aviso informativo do projeto, não um parecer jurídico. A autoexclusão remove os dados operacionais do banco ativo; cópias de segurança e contadores técnicos temporários seguem seus prazos de retenção.
 - Consulte [SECURITY.md](SECURITY.md) para a revisão técnica e os pré-requisitos restantes. Ainda são necessários testes de implantação controlados, auditoria independente, monitoramento, backups e restauração testados, avaliação dos fornecedores e revisão jurídica antes de qualquer disponibilização pública.
 - Não insira dados pessoais, bancários ou financeiros reais.
