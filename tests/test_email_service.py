@@ -152,7 +152,7 @@ class TestEmailService(unittest.TestCase):
                 enviar_email("destino@example.test", "Assunto", "Corpo")
 
         with self.configuracao(MAIL_FROM=""):
-            with self.assertRaisesRegex(RuntimeError, "MAIL_SERVER"):
+            with self.assertRaisesRegex(RuntimeError, "MAIL_FROM"):
                 enviar_email("destino@example.test", "Assunto", "Corpo")
 
     def test_rejeita_starttls_e_ssl_ativos_ao_mesmo_tempo(self):
