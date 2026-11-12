@@ -2,7 +2,7 @@
 import json
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from email_service import enviar_email
 
@@ -92,7 +92,7 @@ class TestEmailService(unittest.TestCase):
         self.assertEqual(cliente.calls[1][0], "send_message")
 
     def test_envia_email_pela_api_https_brevo(self):
-        resposta = unittest.mock.MagicMock()
+        resposta = MagicMock()
         resposta.status = 201
         resposta.__enter__.return_value = resposta
         resposta.__exit__.return_value = False
@@ -102,8 +102,7 @@ class TestEmailService(unittest.TestCase):
             "MAIL_FROM": "Conta+ <conta@example.test>",
             "BREVO_API_KEY": "chave-api-de-teste",
         }
-        with patch.dict(os.environ, ambiente, clear=True), \\
-             patch("email_service.urllib.request.urlopen", return_value=resposta) as urlopen:
+        with patch.dict(os.environ, ambiente, clear=True), patch("email_service.urllib.request.urlopen", return_value=resposta) as urlopen:
             enviar_email("Pessoa <destino@example.test>", "Assunto", "Corpo")
 
         requisicao = urlopen.call_args.args[0]
