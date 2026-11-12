@@ -7,7 +7,7 @@ import ssl
 import urllib.error
 import urllib.request
 from email.message import EmailMessage
-from email.utils import formataddr, parseaddr
+from email.utils import parseaddr
 
 
 def _validar_configuracao_gmail(
@@ -72,8 +72,7 @@ def _enviar_por_brevo(destinatario, assunto, corpo, remetente, api_key):
         method="POST",
     )
     try:
-        # nosec B310: endpoint is a fixed HTTPS URL, never derived from user input.
-        with urllib.request.urlopen(requisicao, timeout=15) as resposta:
+        with urllib.request.urlopen(requisicao, timeout=15) as resposta:  # nosec B310
             if resposta.status not in (200, 201, 202):
                 raise RuntimeError(
                     f"A API Brevo retornou um status inesperado: {resposta.status}."
