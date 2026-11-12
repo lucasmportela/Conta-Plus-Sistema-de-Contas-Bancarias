@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Contratar uma avaliação independente antes de qualquer publicação aberta. A revisão interna e os testes automatizados do repositório não substituem este trabalho.
+Contratar uma avaliação independente antes de qualquer uso em produção ou ampliação do projeto para além da demonstração educacional. A revisão interna e os testes automatizados do repositório não substituem esse trabalho.
 
 ## Escopo mínimo solicitado
 
@@ -10,7 +10,7 @@ Contratar uma avaliação independente antes de qualquer publicação aberta. A 
 2. **Autorização e isolamento:** acesso cruzado entre usuários, contas, movimentações, exportação e autoexclusão.
 3. **Sessão e navegador:** cookies, CSRF, CSP, XSS, clickjacking, cabeçalhos e gestão de sessão.
 4. **Aplicação e dados:** SQL injection, validação de entrada, tratamento de erros, exposição de informações, integridade transacional e privacidade dos backups.
-5. **SMTP e abuso:** enumeração de contas, abuso de envio, rate limiting, configuração TLS e proteção de credenciais.
+5. **E-mail e abuso:** enumeração de contas, abuso de envio, rate limiting, configuração TLS e proteção de credenciais.
 6. **Infraestrutura:** TLS, proxy confiável, hosts permitidos, configuração do container, permissões do volume, segredos, logs, backups e restauração.
 7. **Dependências e cadeia de suprimentos:** dependências Python, imagens Docker, GitHub Actions e permissões mínimas dos workflows.
 8. **Privacidade/LGPD:** inventário de dados, finalidade, base legal, retenção, compartilhamento com fornecedores, direitos dos titulares e processo de incidentes. A avaliação jurídica deve ser feita por profissional habilitado.
@@ -35,13 +35,13 @@ Contratar uma avaliação independente antes de qualquer publicação aberta. A 
 
 ## Critério de aceite
 
-Não considerar a revisão concluída apenas com uma reunião ou checklist. Exigir relatório escrito, tratamento de todos os achados críticos/altos e reteste documentado. Mesmo após a auditoria, a liberação depende de SMTP real, HTTPS/proxy, backup/restauração, retenção e política de privacidade configurados e testados.
+Não considerar a auditoria concluída apenas com uma reunião ou checklist. Exigir relatório escrito, tratamento de todos os achados críticos/altos e reteste documentado. Mesmo após a auditoria, a liberação depende de backup/restauração, monitoramento, política de privacidade e controles operacionais definidos e testados.
 
 ## Informações que o responsável pelo projeto precisa fornecer
 
-- Identificação e contato do controlador/operador do tratamento.
+- Identificação e contato do responsável pelo tratamento.
 - Ambiente de hospedagem e região de processamento.
-- Provedor SMTP e Redis, se utilizados.
+- Provedores de banco de dados e e-mail e serviços adicionais utilizados.
 - Dados coletados, finalidades e prazos de retenção.
 - Fluxo de exclusão, retenção em logs e expiração de backups.
 - Contato para incidentes e solicitações dos titulares.

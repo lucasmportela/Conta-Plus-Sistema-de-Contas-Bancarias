@@ -1,14 +1,26 @@
 # Revisão técnica preliminar de segurança e privacidade — Conta+
 
-**Data:** 10 de novembro de 2026  
-**Escopo:** código-fonte, configuração de produção, autenticação, persistência, SMTP, Redis, cabeçalhos HTTP e automação de testes.  
+**Data:** 12 de novembro de 2026  
+**Escopo:** código-fonte, workflows de CI, configuração de produção, autenticação, persistência, e-mail, rate limiting, cabeçalhos HTTP e estado da demonstração hospedada.  
 **Natureza:** revisão interna assistida e automatizada. **Não é auditoria independente, pentest, parecer jurídico ou certificação.**
 
 ## Decisão
 
-**Não liberar o Conta+ para acesso público aberto nem para dados financeiros reais.**
+**A demonstração de portfólio está publicada, mas o Conta+ não está aprovado para uso em produção nem para dados pessoais, bancários ou financeiros reais.**
 
-A aplicação tem controles relevantes implementados, mas a infraestrutura real ainda não foi configurada e validada. O banco principal é SQLite, o SMTP depende de um provedor e o Redis é apenas um backend opcional para contadores de segurança.
+A publicação atual utiliza Render Free, Turso como banco remoto e Brevo pela API HTTPS. A implantação bem-sucedida demonstra que a aplicação inicia no provedor; não comprova operação bancária segura, disponibilidade contínua, recuperação de desastre ou conformidade jurídica.
+
+## Estado da publicação verificado
+
+| Item | Evidência | Limite |
+|---|---|---|
+| Aplicação | https://conta-plus-demo-doxa.onrender.com | Demonstração educacional; não usar dados reais |
+| Render | Serviço Free, Docker, uma instância, estado live no último deploy consultado | Plano gratuito pode suspender após inatividade |
+| Health check | /api/health configurado no serviço | A configuração do health check não substitui monitoramento externo |
+| Banco | Turso remoto configurado como banco principal da demonstração | Backup e restauração do Turso não foram demonstrados nesta revisão |
+| E-mail | API HTTPS Brevo configurada; smoke test manual de envio concluído com sucesso durante a publicação | Teste pontual; não prova entregabilidade contínua nem autenticação de domínio próprio |
+| GitHub Actions | Workflows de testes Python e operacionais aprovados no commit ee67df7 | CI não equivale a auditoria independente |
+| Logs e métricas | Nenhum erro de aplicação posterior ao último deploy na consulta realizada | Métricas HTTP e logs de requisição estavam sem dados; não há evidência de tráfego ou monitoramento contínuo |
 
 ## Controles verificados no código
 
@@ -22,46 +34,60 @@ A aplicação tem controles relevantes implementados, mas a infraestrutura real 
 
 ## Testes automatizados e operacionais
 
-A suíte principal mantém 58 testes. A automação operacional adiciona:
-- Integração com Redis 7 real: contagem, bloqueio, expiração, TTL, reset e concorrência.
-- Integração SMTP local com Mailpit: envio via SMTP e confirmação da mensagem recebida pela API do Mailpit. Não envia e-mail externo.
-- Smoke test do container: build Docker, inicialização com APP_ENV de produção, health endpoint, HSTS, cookie Secure/HttpOnly/SameSite e persistência do arquivo SQLite no volume.
-- Backup/restauração SQLite: snapshot pela API nativa, verificação de integridade e chaves estrangeiras, restauração para novo arquivo e proteção contra sobrescrita; usa apenas dados sintéticos.
-- Auditoria automatizada com pip-audit e Bandit.
-- Workflow manual para testar o provedor SMTP real, condicionado a secrets do GitHub Actions configurados pelo operador.
+A suíte principal contém **74 testes**:
+
+- 8 testes das regras de negócio.
+- 34 testes das rotas Flask.
+- 9 testes da camada SQLite.
+- 3 testes do backend de limitação com Redis simulado.
+- 15 testes do serviço de e-mail.
+- 5 testes de backup/restauração SQLite.
+
+A automação operacional adiciona **6 testes**:
+
+- 3 testes contra Redis 7 real, incluindo concorrência, bloqueio, expiração, TTL e reset.
+- 1 teste SMTP com Mailpit local para confirmar o recebimento da mensagem.
+- 2 testes de fluxos de confirmação, reenvio e recuperação de senha via Mailpit.
+
+Os dois workflows do GitHub Actions foram aprovados no commit ee67df7. Os testes Mailpit não enviam e-mails à Internet. O smoke test manual da API Brevo foi executado durante a publicação, mas não faz parte dos testes automatizados do CI.
+
+O workflow também executa build e smoke test Docker, verificação de dependências com pip-audit e análise estática com Bandit. O teste Docker simula cabeçalhos HTTPS em CI e não prova, sozinho, a topologia de proxy do provedor.
 
 ## Achados e riscos remanescentes
 
 | Severidade | Achado | Ação necessária |
 |---|---|---|
-| Alta | Nenhum provedor SMTP real foi validado ainda | Configurar secrets e executar o workflow manual; verificar recebimento, spam, SPF, DKIM e DMARC |
-| Alta | Topologia de proxy e terminação TLS não foram exercitadas em provedor real | Confirmar os saltos de proxy e executar smoke test em homologação |
-| Alta | SQLite é o banco principal | Manter uma única instância com disco persistente; migrar para PostgreSQL e testar migração/rollback antes de escalar |
-| Alta | Ainda não houve auditoria independente | Contratar revisão externa de autenticação, autorização, sessão, CSRF, XSS, SQL, infraestrutura e recuperação |
-| Média | Redis só compartilha contadores; não compartilha os dados da aplicação | Configurar Redis gerenciado com TLS/rede privada e manter uma instância até migrar o banco |
-| Média | SMTP é síncrono e sem fila/retry persistente | Definir monitoramento, política de retry e alertas para falhas de entrega |
-| Média | Backup e restauração em infraestrutura externa ainda não foram configurados/testados | Usar scripts/backup_restore.py, escolher armazenamento criptografado, definir retenção e executar restauração real; os testes de CI usam apenas dados sintéticos |
-| Média | Aviso de privacidade não identifica operador, contato, fornecedores concretos, bases legais e prazos específicos | Completar dados reais do operador e obter revisão jurídica/privacidade adequada à LGPD |
-| Baixa | HSTS é emitido quando Flask reconhece a requisição como HTTPS | Verificar X-Forwarded-Proto e cabeçalhos no proxy real; avaliar includeSubDomains somente se todos os subdomínios suportarem HTTPS |
+| Alta | Não houve auditoria independente nem pentest | Contratar avaliação externa e documentar reteste |
+| Alta | Backup e restauração do banco Turso não foram demonstrados | Definir cópia protegida, retenção, RPO/RTO e exercício de restauração específico do provedor |
+| Alta | Política de privacidade ainda não define todos os elementos necessários | Confirmar responsável, bases legais, prazos, fornecedores, canal e direitos; obter revisão jurídica |
+| Alta | Não há evidência de monitoramento contínuo ou alertas | Configurar verificações externas e alertas de disponibilidade, erros e falhas de e-mail |
+| Média | Validação da cadeia de proxy/TLS no provedor não foi demonstrada de ponta a ponta | Confirmar cabeçalhos e TRUSTED_PROXY_HOPS no ambiente real |
+| Média | O teste manual Brevo é pontual | Monitorar entregabilidade e autenticar domínio próprio com SPF, DKIM e DMARC, quando aplicável |
+| Média | A aplicação utiliza uma instância e Turso; SQLite local permanece no desenvolvimento | Migrar para PostgreSQL e testar migração/rollback antes de escalar horizontalmente |
+| Média | Redis compartilha apenas contadores, não os dados da aplicação | Não interpretar Redis como solução de banco multi-instância |
+| Média | A ferramenta de backup do repositório cobre SQLite local, não Turso | Criar procedimento específico para o banco remoto |
+| Baixa | Render Free pode suspender o serviço após inatividade | Informar o visitante sobre a possível demora no primeiro acesso |
 
 ## Privacidade
 
-A interface deixou de carregar Google Fonts de terceiros, reduzindo uma transferência desnecessária de dados do navegador. O serviço SMTP, a hospedagem e Redis, se habilitado, continuam sendo fornecedores que o operador deverá identificar e avaliar. A política não deve afirmar conformidade com a LGPD sem definição de controlador/operador, finalidades, bases legais, prazos, canal de contato e procedimentos para direitos dos titulares.
+A demonstração publicada utiliza Render para hospedagem, Turso para persistência e Brevo para e-mails transacionais. A interface não carrega Google Fonts de terceiros. A política de privacidade precisa detalhar o papel desses fornecedores, as finalidades e bases legais aplicáveis, os prazos de retenção e o canal para solicitações dos titulares. Não se deve declarar conformidade com a LGPD sem avaliação adequada.
 
 ## Evidência e limites
 
 - Os testes de Mailpit demonstram conexão SMTP e recebimento em servidor local de captura, não entregabilidade na Internet.
-- O workflow SMTP do provedor real é manual, exige confirmação explícita de envio e só executa quando MAIL_SERVER, MAIL_FROM e SMTP_TEST_RECIPIENT estão cadastrados como secrets no GitHub Actions. Ele envia uma única mensagem ao destinatário explicitamente configurado.
-- O container executa como UID 10001 sem privilégios; o volume persistente precisa ser montado com propriedade/permissões para UID/GID 10001. O teste de container verifica a configuração de produção em CI, não a infraestrutura de um provedor de hospedagem.
+- O smoke test manual Brevo demonstra que o envio de teste funcionou naquele momento; não garante entrega futura, ausência de spam ou autenticação de domínio.
+- O container executa como UID 10001 sem privilégios; o volume persistente precisa ser montado com propriedade/permissões para UID/GID 10001. O teste de container verifica configuração de produção em CI, não a infraestrutura completa de um provedor.
 - pip-audit detecta vulnerabilidades conhecidas nas dependências resolvidas; Bandit é análise estática, não prova ausência de falhas.
+- Os testes de backup/restauração usam dados sintéticos e SQLite local. Não comprovam backup, retenção ou restauração do banco Turso.
 - Nenhum teste deve usar dados bancários reais.
 
-## Critério para reavaliar a liberação
+## Critério para considerar produção
 
-1. Todos os workflows operacionais e de segurança aprovados.
-2. Teste do provedor SMTP real e autenticação do domínio de envio.
-3. Homologação com HTTPS, proxy e host reais.
-4. Backup e restauração demonstrados.
-5. Exercício de backup/restauração no armazenamento e infraestrutura escolhidos, com criptografia, retenção e evidência de recuperação.
-6. Migração para PostgreSQL antes de múltiplas instâncias.
-7. Revisão externa independente e revisão da política de privacidade por profissional qualificado.
+1. Auditoria independente concluída, achados críticos/altos tratados e reteste documentado.
+2. Política de privacidade revisada, com responsável, finalidades, bases legais, fornecedores, prazos e canal de contato definidos.
+3. Backup e restauração do banco de produção demonstrados, com criptografia, retenção e responsáveis.
+4. Monitoramento, alertas, logs e resposta a incidentes definidos.
+5. HTTPS, proxy, hosts, cookies e cabeçalhos verificados no ambiente real.
+6. E-mail transacional monitorado e domínio autenticado quando aplicável.
+7. Migração para PostgreSQL antes de múltiplas instâncias.
+8. Testes de implantação e recuperação repetidos após mudanças relevantes.

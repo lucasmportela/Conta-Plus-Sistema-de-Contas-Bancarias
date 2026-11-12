@@ -1,8 +1,17 @@
 # Conta+ — Sistema de Contas Bancárias
 
-Aplicação web demonstrativa para gerenciamento individual de contas bancárias, desenvolvida com Python, Flask e SQLite. O sistema oferece cadastro com confirmação de e-mail, login, recuperação de senha, isolamento de contas por proprietário, depósitos, saques, transferências e consulta de extratos.
+Aplicação web demonstrativa para gerenciamento individual de contas bancárias, desenvolvida com Python e Flask. Utiliza SQLite no desenvolvimento local e Turso (compatível com SQLite) na demonstração hospedada. O sistema oferece cadastro com confirmação de e-mail, login, recuperação de senha, isolamento de contas por proprietário, depósitos, saques, transferências e consulta de extratos.
 
-> **Aviso:** este é um projeto educacional para portfólio. Não é um sistema bancário real e não deve ser utilizado para armazenar dinheiro ou dados financeiros verdadeiros.
+[![Testes Python](https://github.com/lucasmportela/Conta-Plus-Sistema-de-Contas-Bancarias/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/lucasmportela/Conta-Plus-Sistema-de-Contas-Bancarias/actions/workflows/tests.yml)
+[![Testes operacionais e de segurança](https://github.com/lucasmportela/Conta-Plus-Sistema-de-Contas-Bancarias/actions/workflows/operational.yml/badge.svg?branch=main)](https://github.com/lucasmportela/Conta-Plus-Sistema-de-Contas-Bancarias/actions/workflows/operational.yml)
+
+## Demonstração online
+
+**Acesse:** https://conta-plus-demo-doxa.onrender.com
+
+A aplicação está publicada no Render Free, com banco remoto Turso e envio de e-mails pela API HTTPS do Brevo. Como o serviço gratuito pode entrar em suspensão após um período sem acessos, a primeira abertura pode levar cerca de um minuto.
+
+> **Aviso:** este é um projeto educacional para portfólio. Não é um sistema bancário real e não deve ser utilizado para armazenar dinheiro, documentos ou dados financeiros verdadeiros. Utilize somente dados fictícios.
 
 ## Funcionalidades
 
@@ -29,27 +38,27 @@ Aplicação web demonstrativa para gerenciamento individual de contas bancárias
 - Persistência local em SQLite no desenvolvimento e remota no Turso na demonstração hospedada, com vínculo entre contas e usuários.
 - Interface responsiva para desktop e dispositivos móveis.
 
-## Demonstração Visual
+## Capturas de tela
 
-### Tela Inicial (Vazia)
-Tela inicial do programa aguardando as primeiras entradas de dados para serem processados com a exibição de total de contas cadastradas, saldo consolidado de todas as contas e número total de movimentações registradas.
-![Tela Inicial](docs/screenshots/tela-inicial.png)
+### Painel inicial
+Indicadores das contas do usuário autenticado: total de contas, saldo consolidado e quantidade de movimentações.
+![Painel inicial](docs/screenshots/tela-inicial.png)
 
-### Tela Cadastro
-Seção cadastro aguardando os dados nome do titular, número da conta e saldo inicial para cadastrar uma nova conta.
-![Tela Cadastro](docs/screenshots/novo-cadastro.png)
+### Cadastro de conta
+Formulário para cadastrar uma conta de demonstração com titular, número e saldo inicial.
+![Cadastro de conta](docs/screenshots/novo-cadastro.png)
 
-### Tela Operação
-Operação de movimentação de conta com as opções saque, depósito ou transferência para outra conta com especificação de conta e valor da operação.
-![Tela Operação](docs/screenshots/tela-operacao.png)
+### Operações
+Área para realizar depósitos, saques e transferências entre contas próprias.
+![Operações](docs/screenshots/tela-operacao.png)
 
-### Tela Acompanhamento
-Informações das contas cadastradas como saldo, nome do titular e número de conta.
-![Tela Acompanhamento](docs/screenshots/tela-acompanhamento.png)
+### Contas cadastradas
+Lista das contas do usuário autenticado, com titular, número e saldo.
+![Contas cadastradas](docs/screenshots/tela-acompanhamento.png)
 
-### Histórico Financeiro
-Extrato de uma conta específica exibindo nome do titular, número da conta, saldo atual e transações realizadas com detalhes, data e horário.
-![Histórico Financeiro](docs/screenshots/historico-financeiro.png)
+### Extrato
+Histórico individual de movimentações, com valores e datas.
+![Extrato](docs/screenshots/historico-financeiro.png)
 
 As capturas de tela utilizadas neste README estão armazenadas em `docs/screenshots/`.
 
@@ -86,7 +95,7 @@ Para testar localmente, use Gmail SMTP com uma conta exclusiva e senha de app, c
 
 Construa a imagem com `docker build -t conta-plus .`. Para executar o modo local com SQLite, monte um volume persistente em `/data`. Para usar a configuração remota, instale as dependências do projeto e defina `DATABASE_BACKEND=turso`, `TURSO_DATABASE_URL` e `TURSO_AUTH_TOKEN`. Configure `MAIL_PROVIDER=brevo` e `BREVO_API_KEY` quando estiver hospedado no Render Free. O container roda como usuário não-root e usa Gunicorn.
 
-A integração Mailpit valida o transporte e o recebimento local, mas não substitui o teste com o provedor SMTP real. A revisão técnica preliminar está em docs/SECURITY_REVIEW.md; ela não é auditoria independente nem parecer jurídico.
+O Mailpit valida o transporte SMTP e o recebimento local. O envio pela API HTTPS do Brevo também foi testado manualmente durante a publicação; esse teste pontual não comprova entregabilidade contínua nem autenticação de domínio. A revisão técnica preliminar está em docs/SECURITY_REVIEW.md; ela não é auditoria independente nem parecer jurídico. O escopo sugerido para uma avaliação externa está em docs/INDEPENDENT_AUDIT_SCOPE.md.
 
 ## Estrutura do projeto
 
@@ -128,10 +137,14 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
 │   ├── test_database.py
 │   ├── test_rate_limit.py
 │   ├── test_email_service.py
+│   ├── test_backup_restore.py
 │   ├── test_rate_limit_redis_integration.py
-│   └── test_email_service_integration.py
+│   ├── test_email_service_integration.py
+│   └── test_email_flows_integration.py
 └── docs/
     ├── SECURITY_REVIEW.md
+    ├── INDEPENDENT_AUDIT_SCOPE.md
+    ├── BACKUP_RESTORE.md
     ├── SMTP_PROVIDER_SETUP.md
     ├── DEPLOY_FREE.md
     └── screenshots/
@@ -145,7 +158,7 @@ Conta-Plus-Sistema-de-Contas-Bancarias/
 
 ## Publicação gratuita
 
-A configuração para Render Free + Turso Free + Brevo Free está em [docs/DEPLOY_FREE.md](docs/DEPLOY_FREE.md). A demonstração é destinada a portfólio e não deve armazenar dados financeiros reais. O plano gratuito do Brevo inclui até 300 envios por dia e mantém a identificação visual da plataforma nos e-mails. Consulte também a observação sobre o remetente Gmail no guia de publicação.
+A configuração para Render Free + Turso Free + Brevo Free está em [docs/DEPLOY_FREE.md](docs/DEPLOY_FREE.md). A [demonstração publicada](https://conta-plus-demo-doxa.onrender.com) é destinada a portfólio e não deve armazenar dados financeiros reais. O plano gratuito do Brevo inclui até 300 envios por dia e mantém a identificação visual da plataforma nos e-mails. Consulte também a observação sobre o remetente Gmail no guia de publicação.
 
 ## Como executar
 
@@ -366,7 +379,7 @@ O Conta+ continua sendo um projeto educacional de portfólio — não é um sist
 - SQLite armazena os limites em uma instância; Redis pode compartilhar esses contadores entre instâncias. O banco principal continua SQLite, portanto Redis sozinho não torna o sistema multi-instância.
 - Em produção, a aplicação exige HTTPS, host permitido, quantidade explícita de proxies confiáveis, chave de sessão persistente, banco configurado e provedor de e-mail válido. O `ProxyFix` só confia nos saltos configurados.
 - A política em [`/privacidade`](https://github.com/lucasmportela/Conta-Plus-Sistema-de-Contas-Bancarias/blob/main/templates/privacy.html) é um aviso informativo do projeto, não um parecer jurídico. A autoexclusão remove os dados operacionais do banco ativo; cópias de segurança e contadores técnicos temporários seguem seus prazos de retenção.
-- Consulte [SECURITY.md](SECURITY.md) para a revisão técnica e os pré-requisitos restantes. Ainda são necessários testes de implantação controlados, auditoria independente, monitoramento, backups e restauração testados, avaliação dos fornecedores e revisão jurídica antes de qualquer disponibilização pública.
+- Consulte [SECURITY.md](SECURITY.md) e [docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md) para o estado de segurança e as pendências. A demonstração já está publicamente disponível, mas isso não representa aprovação para produção. Antes de qualquer uso além da demonstração, ainda são necessários auditoria independente, monitoramento operacional, backup e restauração do banco Turso, avaliação dos fornecedores e revisão jurídica da política de privacidade.
 - Não insira dados pessoais, bancários ou financeiros reais.
 
 ## Autor
