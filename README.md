@@ -41,7 +41,7 @@ A aplicação está publicada no Render Free, com banco remoto Turso e envio de 
 ## Capturas de tela
 
 ### Tela Login
-Tela de login onde o usuário pode logar com o email e senha.
+Tela de login onde o usuário pode logar com o email e senha, com opção de recuperação de senha, confirmação de email e cadastro de nova conta.
 ![Tela Login](docs/screenshots/tela-login.png)
 
 ### Painel inicial
