@@ -36,10 +36,15 @@ if APP_ENV == "production" and (not SECRET_KEY or len(SECRET_KEY) < 32):
     raise RuntimeError("Defina SECRET_KEY forte (mínimo de 32 caracteres) no ambiente de produção.")
 
 TRUSTED_PROXY_HOPS = int(os.getenv("TRUSTED_PROXY_HOPS", "0"))
+RENDER_EXTERNAL_HOSTNAME = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip().lower()
 TRUSTED_HOSTS = [
     host.strip() for host in os.getenv("TRUSTED_HOSTS", "").split(",") if host.strip()
 ]
+if not TRUSTED_HOSTS and APP_ENV == "production" and RENDER_EXTERNAL_HOSTNAME:
+    TRUSTED_HOSTS = [RENDER_EXTERNAL_HOSTNAME]
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+if not PUBLIC_BASE_URL and RENDER_EXTERNAL_HOSTNAME:
+    PUBLIC_BASE_URL = f"https://{RENDER_EXTERNAL_HOSTNAME}"
 if APP_ENV == "production":
     if TRUSTED_PROXY_HOPS < 1:
         raise RuntimeError("Configure TRUSTED_PROXY_HOPS com a quantidade exata de proxies confiáveis.")
