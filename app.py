@@ -6,7 +6,6 @@ import hmac
 import os
 import time
 import secrets
-import sqlite3
 from datetime import timedelta
 from email.utils import parseaddr
 from hashlib import sha256
@@ -23,6 +22,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from conta import Conta, validar_valor
 from database import (
+    INTEGRITY_ERRORS,
     conectar, inicializar_banco, obter_conta, listar_contas, salvar_transacao,
 )
 from email_service import enviar_email
@@ -50,38 +50,55 @@ if APP_ENV == "production":
     public_host = PUBLIC_BASE_URL.split("://", 1)[1].split("/", 1)[0].split(":", 1)[0].lower()
     if public_host not in {host.lower() for host in TRUSTED_HOSTS}:
         raise RuntimeError("O domínio de PUBLIC_BASE_URL também deve constar em TRUSTED_HOSTS.")
-    if not os.getenv("MAIL_SERVER") or not os.getenv("MAIL_FROM"):
-        raise RuntimeError("Configure MAIL_SERVER e MAIL_FROM para envio de e-mails.")
-    mail_tls = os.getenv("MAIL_USE_TLS", "true").strip().lower() in {"1", "true", "yes", "on"}
-    mail_ssl = os.getenv("MAIL_USE_SSL", "false").strip().lower() in {"1", "true", "yes", "on"}
-    if mail_tls == mail_ssl:
-        raise RuntimeError("Em produção, habilite exatamente uma opção: MAIL_USE_TLS ou MAIL_USE_SSL.")
-    mail_auth_mode = os.getenv("MAIL_AUTH_MODE", "password").strip().lower()
-    if mail_auth_mode != "password":
-        raise RuntimeError(
-            "OAuth2 da Microsoft foi removido. Remova MAIL_AUTH_MODE=oauth2 "
-            "e configure Gmail SMTP com uma senha de app do Google."
-        )
-    mail_server = os.getenv("MAIL_SERVER", "").strip().lower()
-    if mail_server == "smtp.gmail.com":
-        mail_username = os.getenv("MAIL_USERNAME", "").strip().lower()
-        mail_password = os.getenv("MAIL_PASSWORD", "").strip()
-        mail_from = parseaddr(os.getenv("MAIL_FROM", ""))[1].strip().lower()
-        if not mail_username.endswith("@gmail.com"):
-            raise RuntimeError("MAIL_USERNAME deve conter a conta dedicada @gmail.com.")
-        if not mail_password:
-            raise RuntimeError("Configure MAIL_PASSWORD com uma senha de app do Google.")
-        if mail_from != mail_username:
-            raise RuntimeError("MAIL_FROM deve corresponder a MAIL_USERNAME no Gmail.")
-        mail_port = os.getenv("MAIL_PORT", "587").strip()
-        transporte_gmail_valido = (
-            (mail_port == "587" and mail_tls and not mail_ssl)
-            or (mail_port == "465" and mail_ssl and not mail_tls)
-        )
-        if not transporte_gmail_valido:
+    mail_provider = os.getenv("MAIL_PROVIDER", "smtp").strip().lower()
+    mail_from = parseaddr(os.getenv("MAIL_FROM", ""))[1].strip()
+    if not mail_from:
+        raise RuntimeError("Configure MAIL_FROM com um endereço de remetente válido.")
+
+    if mail_provider == "brevo":
+        if not os.getenv("BREVO_API_KEY", "").strip():
+            raise RuntimeError("Configure BREVO_API_KEY para usar o envio pela API Brevo.")
+    elif mail_provider == "smtp":
+        if not os.getenv("MAIL_SERVER", "").strip():
+            raise RuntimeError("Configure MAIL_SERVER para habilitar o envio SMTP.")
+        mail_tls = os.getenv("MAIL_USE_TLS", "true").strip().lower() in {"1", "true", "yes", "on"}
+        mail_ssl = os.getenv("MAIL_USE_SSL", "false").strip().lower() in {"1", "true", "yes", "on"}
+        if mail_tls == mail_ssl:
+            raise RuntimeError("Em produção, habilite exatamente uma opção: MAIL_USE_TLS ou MAIL_USE_SSL.")
+        mail_auth_mode = os.getenv("MAIL_AUTH_MODE", "password").strip().lower()
+        if mail_auth_mode != "password":
             raise RuntimeError(
-                "Gmail SMTP exige porta 587 com STARTTLS ou porta 465 com SSL."
+                "O modo OAuth2 legado foi removido. Configure SMTP com senha de app "
+                "ou MAIL_PROVIDER=brevo com BREVO_API_KEY."
             )
+        mail_server = os.getenv("MAIL_SERVER", "").strip().lower()
+        if mail_server == "smtp.gmail.com":
+            mail_username = os.getenv("MAIL_USERNAME", "").strip().lower()
+            mail_password = os.getenv("MAIL_PASSWORD", "").strip()
+            if not mail_username.endswith("@gmail.com"):
+                raise RuntimeError("MAIL_USERNAME deve conter uma conta @gmail.com.")
+            if not mail_password:
+                raise RuntimeError("Configure MAIL_PASSWORD com uma senha de app do Google.")
+            if mail_from.strip().lower() != mail_username:
+                raise RuntimeError("MAIL_FROM deve corresponder a MAIL_USERNAME no Gmail.")
+            mail_port = os.getenv("MAIL_PORT", "587").strip()
+            transporte_gmail_valido = (
+                (mail_port == "587" and mail_tls and not mail_ssl)
+                or (mail_port == "465" and mail_ssl and not mail_tls)
+            )
+            if not transporte_gmail_valido:
+                raise RuntimeError(
+                    "Gmail SMTP exige porta 587 com STARTTLS ou porta 465 com SSL."
+                )
+    else:
+        raise RuntimeError("MAIL_PROVIDER deve ser smtp ou brevo.")
+
+    database_backend = os.getenv("DATABASE_BACKEND", "sqlite").strip().lower()
+    if database_backend == "turso":
+        if not os.getenv("TURSO_DATABASE_URL", "").strip() or not os.getenv("TURSO_AUTH_TOKEN", "").strip():
+            raise RuntimeError("Configure TURSO_DATABASE_URL e TURSO_AUTH_TOKEN para o banco Turso.")
+    elif database_backend != "sqlite":
+        raise RuntimeError("DATABASE_BACKEND deve ser sqlite ou turso.")
 if not SECRET_KEY:
     SECRET_KEY = secrets.token_hex(32)
 
@@ -356,7 +373,7 @@ def api_registrar():
                 (nome, email, generate_password_hash(senha, method="scrypt")),
             )
             usuario_id = cursor.lastrowid
-    except sqlite3.IntegrityError:
+    except INTEGRITY_ERRORS:
         # A resposta não revela se o endereço já está cadastrado.
         return jsonify({"mensagem": MENSAGEM_CADASTRO}), 202
 
