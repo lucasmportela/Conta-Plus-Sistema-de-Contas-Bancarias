@@ -72,6 +72,7 @@ def _enviar_por_brevo(destinatario, assunto, corpo, remetente, api_key):
         method="POST",
     )
     try:
+        # nosec B310: endpoint is a fixed HTTPS URL, never derived from user input.
         with urllib.request.urlopen(requisicao, timeout=15) as resposta:
             if resposta.status not in (200, 201, 202):
                 raise RuntimeError(
