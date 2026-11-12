@@ -1,7 +1,8 @@
 """Testes do envio SMTP e dos canais criptografados."""
+import json
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from email_service import enviar_email
 
@@ -90,13 +91,68 @@ class TestEmailService(unittest.TestCase):
         self.assertEqual(cliente.calls[0], ("login", "usuario", "senha-de-teste"))
         self.assertEqual(cliente.calls[1][0], "send_message")
 
+    def test_envia_email_pela_api_https_brevo(self):
+        resposta = MagicMock()
+        resposta.status = 201
+        resposta.__enter__.return_value = resposta
+        resposta.__exit__.return_value = False
+
+        ambiente = {
+            "MAIL_PROVIDER": "brevo",
+            "MAIL_FROM": "Conta+ <conta@example.test>",
+            "BREVO_API_KEY": "chave-api-de-teste",
+        }
+        with patch.dict(os.environ, ambiente, clear=True), patch("email_service.urllib.request.urlopen", return_value=resposta) as urlopen:
+            enviar_email("Pessoa <destino@example.test>", "Assunto", "Corpo")
+
+        requisicao = urlopen.call_args.args[0]
+        self.assertEqual(requisicao.full_url, "https://api.brevo.com/v3/smtp/email")
+        self.assertEqual(requisicao.get_header("Api-key"), "chave-api-de-teste")
+        payload = json.loads(requisicao.data.decode("utf-8"))
+        self.assertEqual(payload["sender"]["email"], "conta@example.test")
+        self.assertEqual(payload["to"][0]["email"], "destino@example.test")
+        self.assertEqual(payload["subject"], "Assunto")
+        self.assertEqual(payload["textContent"], "Corpo")
+
+    def test_brevo_exige_chave_de_api(self):
+        with patch.dict(
+            os.environ,
+            {"MAIL_PROVIDER": "brevo", "MAIL_FROM": "Conta+ <conta@example.test>"},
+            clear=True,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "BREVO_API_KEY"):
+                enviar_email("destino@example.test", "Assunto", "Corpo")
+
+    def test_brevo_nao_expoe_detalhes_da_chave_em_erro_http(self):
+        from urllib.error import HTTPError
+
+        erro = HTTPError(
+            "https://api.brevo.com/v3/smtp/email",
+            401,
+            "Unauthorized",
+            {},
+            None,
+        )
+        with patch.dict(
+            os.environ,
+            {
+                "MAIL_PROVIDER": "brevo",
+                "MAIL_FROM": "Conta+ <conta@example.test>",
+                "BREVO_API_KEY": "chave-secreta",
+            },
+            clear=True,
+        ), patch("email_service.urllib.request.urlopen", side_effect=erro):
+            with self.assertRaisesRegex(RuntimeError, "HTTP 401") as contexto:
+                enviar_email("destino@example.test", "Assunto", "Corpo")
+        self.assertNotIn("chave-secreta", str(contexto.exception))
+
     def test_rejeita_configuracao_sem_servidor_ou_remetente(self):
         with self.configuracao(MAIL_SERVER=""):
             with self.assertRaisesRegex(RuntimeError, "MAIL_SERVER"):
                 enviar_email("destino@example.test", "Assunto", "Corpo")
 
         with self.configuracao(MAIL_FROM=""):
-            with self.assertRaisesRegex(RuntimeError, "MAIL_SERVER"):
+            with self.assertRaisesRegex(RuntimeError, "MAIL_FROM"):
                 enviar_email("destino@example.test", "Assunto", "Corpo")
 
     def test_rejeita_starttls_e_ssl_ativos_ao_mesmo_tempo(self):

@@ -23,6 +23,6 @@ USER appuser
 EXPOSE 10000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD python -c "import os,urllib.request; req=urllib.request.Request('http://127.0.0.1:'+os.getenv('PORT','10000')+'/api/health',headers={'Host':'localhost','X-Forwarded-Proto':'https'}); urllib.request.urlopen(req,timeout=3).read()"
+    CMD python -c "import os,urllib.request; host=os.getenv('RENDER_EXTERNAL_HOSTNAME','localhost'); req=urllib.request.Request('http://127.0.0.1:'+os.getenv('PORT','10000')+'/api/health',headers={'Host':host,'X-Forwarded-Proto':'https'}); urllib.request.urlopen(req,timeout=3).read()"
 
 CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:${PORT:-10000} --workers ${WEB_CONCURRENCY:-1} --threads ${GUNICORN_THREADS:-4} --timeout 30 app:app"]
