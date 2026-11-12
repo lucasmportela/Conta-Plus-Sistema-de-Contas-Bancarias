@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: conta-plus-demo
+    runtime: docker
+    plan: free
+    region: ohio
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_BACKEND
+        value: turso
+      - key: MAIL_PROVIDER
+        value: brevo
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"
+      - key: LOGIN_RATE_LIMIT_BACKEND
+        value: sqlite
+      - key: SECRET_KEY
+        generateValue: true
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
