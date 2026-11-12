@@ -6,7 +6,7 @@ Esta configuração publica uma **demonstração de portfólio**, não um sistem
 
 - **Render Free:** executa a aplicação Flask em Docker e fornece HTTPS e um endereço `onrender.com`.
 - **Turso Free:** mantém os dados em um banco SQLite remoto, fora do sistema de arquivos temporário do Render.
-- **Brevo Free:** envia confirmação de cadastro e recuperação de senha pela API HTTPS. O Render Free bloqueia as portas SMTP 25, 465 e 587.
+- **Brevo Free:** envia confirmação de cadastro e recuperação de senha pela API HTTPS. O plano gratuito inclui até 300 envios por dia e mantém a marca Brevo nos e-mails. O Render Free bloqueia as portas SMTP 25, 465 e 587.
 
 O código continua usando SQLite localmente. Em produção, `DATABASE_BACKEND=turso` seleciona o banco remoto. Para e-mails, `MAIL_PROVIDER=brevo` seleciona a API; o SMTP Gmail continua disponível para desenvolvimento local.
 
@@ -65,9 +65,12 @@ Confira também os logs do Render. Não compartilhe links de confirmação, toke
 
 - O Render desliga serviços Free após 15 minutos sem tráfego; a próxima abertura pode levar cerca de um minuto.
 - O sistema de arquivos do Render Free é temporário. Por isso, o banco principal é remoto no Turso, não o arquivo SQLite do container.
-- O Render informa 750 horas gratuitas de instância por workspace/mês e pode suspender serviços ao atingir limites aplicáveis.
+- O Render oferece 750 horas gratuitas de instância por workspace/mês. Serviços Free adormecem após 15 minutos sem tráfego e podem levar cerca de um minuto para acordar. Se o limite de horas for atingido, os serviços gratuitos são suspensos até o próximo mês.
+- O Render pode suspender um serviço gratuito que gere volume incomum de tráfego externo; mantenha esta demonstração com baixo volume de acessos e monitore o uso.
+- Para evitar cobrança, não habilite upgrades nem excedentes pagos no Turso/Brevo e confira o limite de gastos do workspace Render. Se houver forma de pagamento cadastrada, configure um limite de gastos antes de publicar; sem método de pagamento, o Render informa que suspende o serviço ao esgotar a franquia em vez de cobrar o excedente de banda.
 - O Render bloqueia saída SMTP pelas portas 25, 465 e 587; por isso o envio hospedado usa HTTPS.
 - O Turso Free tem limites de uso. Confira sempre os limites e as regras de cobrança atuais no painel antes de habilitar qualquer opção de excedente.
+- O Turso Free atualmente inclui 100 bancos, 5 GB de armazenamento, 500 milhões de linhas lidas e 10 milhões de linhas escritas por mês; confira o painel e mantenha excedentes desativados.
 - O plano gratuito e os limites dos provedores podem mudar. Revise os painéis periodicamente e não habilite upgrade automático.
 - Uma demonstração pública não deve receber dados bancários reais. O Conta+ continua sendo um projeto educacional de portfólio.
 
