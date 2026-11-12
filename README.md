@@ -309,9 +309,9 @@ As rotas protegidas exigem sessão autenticada. Requisições POST, PUT, PATCH e
 
 A suíte utiliza `unittest` e o cliente de testes do Flask. Os testes de integração criam bancos SQLite temporários, isolados dos dados locais da aplicação.
 
-**Suíte principal: 71 testes automatizados — 8 testes unitários das regras de negócio, 34 testes de integração das rotas Flask, 9 testes da camada SQLite, 3 testes do backend de limitação com Redis simulado, 12 testes do serviço de e-mail SMTP/Gmail simulado e 5 testes de backup/restauração SQLite.**
+**Suíte principal: 74 testes automatizados — 8 testes unitários das regras de negócio, 34 testes de integração das rotas Flask, 9 testes da camada SQLite, 3 testes do backend de limitação com Redis simulado, 15 testes do serviço de e-mail SMTP/Gmail/Brevo simulado e 5 testes de backup/restauração SQLite.**
 
-**Integração operacional adicional: 6 testes — 3 contra Redis real e 3 via Mailpit local (transporte SMTP, confirmação/reenvio de cadastro e recuperação de senha).** Eles são executados pelo workflow operacional; ao rodar a suíte Python sem serviços configurados, aparecem como ignorados (*skipped*). **Total: 77 testes distintos**, todos aprovados em seus respectivos jobs do CI.
+**Integração operacional adicional: 6 testes — 3 contra Redis real e 3 via Mailpit local (transporte SMTP, confirmação/reenvio de cadastro e recuperação de senha).** Eles são executados pelo workflow operacional; ao rodar a suíte Python sem serviços configurados, aparecem como ignorados (*skipped*). **Total: 80 testes distintos**, todos aprovados em seus respectivos jobs do CI.
 
 Os testes de backup/restauração usam registros sintéticos, verificam a integridade SQLite e garantem que a restauração não sobrescreva arquivos existentes. Eles não configuram backup externo nem comprovam recuperação em produção. Consulte docs/BACKUP_RESTORE.md.
 
@@ -321,7 +321,7 @@ Os testes de backup/restauração usam registros sintéticos, verificam a integr
 - **Testes das rotas (`test_api.py`):** cadastro pendente, confirmação e expiração de tokens, reenvio de confirmação, login bloqueado até confirmar e-mail, recuperação e redefinição de senha, uso único de tokens, revogação de sessões, respostas contra enumeração, limitação de tentativas, CSRF, autorização, isolamento de dados, exportação JSON dos próprios dados e exclusão segura da própria conta.
 - **Testes do banco (`test_database.py`):** criação de tabelas e índices, persistência, commit, rollback, unicidade, integridade referencial, consultas por proprietário, migração de banco legado e concorrência no bloqueio de login.
 - **Testes do limitador (`test_rate_limit.py`):** configuração do backend Redis, validação da URL, execução atômica dos scripts Lua e remoção dos contadores após autenticação bem-sucedida.
-- **Testes de e-mail (`test_email_service.py`):** envio SMTP genérico por STARTTLS e SSL, envio Gmail com senha de app por STARTTLS e SSL, validação do remetente, rejeição de credenciais ausentes e recusa de modos de autenticação não suportados.
+- **Testes de e-mail (`test_email_service.py`):** envio SMTP genérico por STARTTLS e SSL, envio Gmail com senha de app por STARTTLS e SSL, envio pela API HTTPS Brevo, validação do remetente e chave de API, e tratamento seguro de erros do provedor.
 
 Execute toda a suíte a partir da raiz do repositório (a pasta que contém `app.py`, `conta.py` e `tests/`):
 
