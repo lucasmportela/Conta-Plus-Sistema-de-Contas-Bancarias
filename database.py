@@ -4,14 +4,49 @@ from contextlib import contextmanager
 from pathlib import Path
 
 DB_PATH = Path(os.getenv("DATABASE_PATH", str(Path(__file__).resolve().parent / "instance" / "contas.db"))).expanduser()
+DATABASE_BACKEND = os.getenv("DATABASE_BACKEND", "sqlite").strip().lower()
+
+if DATABASE_BACKEND not in {"sqlite", "turso"}:
+    raise RuntimeError("DATABASE_BACKEND deve ser sqlite ou turso.")
+
+try:
+    import turso_serverless
+except ImportError:
+    turso_serverless = None
+
+INTEGRITY_ERRORS = (sqlite3.IntegrityError,) + (
+    (turso_serverless.IntegrityError,) if turso_serverless is not None else ()
+)
 
 
-@contextmanager
-def conectar():
+def _abrir_conexao():
+    if DATABASE_BACKEND == "turso":
+        database_url = os.getenv("TURSO_DATABASE_URL", "").strip()
+        auth_token = os.getenv("TURSO_AUTH_TOKEN", "").strip()
+        if not database_url or not auth_token:
+            raise RuntimeError(
+                "Configure TURSO_DATABASE_URL e TURSO_AUTH_TOKEN para usar o banco Turso."
+            )
+        if turso_serverless is None:
+            raise RuntimeError(
+                "O driver turso-serverless não está instalado. "
+                "Use a imagem Docker de produção ou instale requirements-render.txt."
+            )
+        conn = turso_serverless.connect(database_url, auth_token=auth_token)
+        conn.row_factory = turso_serverless.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        return conn
+
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    return conn
+
+
+@contextmanager
+def conectar():
+    conn = _abrir_conexao()
     try:
         yield conn
         conn.commit()
